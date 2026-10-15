@@ -33,7 +33,7 @@ The workflows run `node scripts/verify-pos.mjs` and `node --test tests/*.test.cj
 
 ## Operations and recovery
 
-See [the POS operations runbook](docs/OPERATIONS.md) before updating the tablet, restoring a backup, or using the POS for live service.
+See [the POS operations runbook](docs/OPERATIONS.md) before updating the tablet, restoring a backup, or using the POS for live service. Use the [controlled release acceptance checklist](docs/ACCEPTANCE_CHECKLIST.md) to verify signing compatibility, backup/restore, offline checkout, and target hardware before release.
 
 ## Important limitations
 

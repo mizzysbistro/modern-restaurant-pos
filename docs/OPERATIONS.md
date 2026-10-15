@@ -84,3 +84,8 @@ A green workflow means the verifier, automated backup/report/display-state tests
 - cash/card/GCash transactions are integrated with a real payment processor.
 
 Before live use, perform an end-to-end test on the target hardware with test data, verify a full backup and restore on a test copy, check totals against known transactions, and verify the signing certificate and in-place upgrade.
+
+
+## Controlled release acceptance checklist
+
+Use the [target-device acceptance checklist](ACCEPTANCE_CHECKLIST.md) to record actual evidence for signer matching, safe in-place updates, representative backup/restore, offline checkout, reporting, kitchen tickets, receipt printing, and customer display behavior. Use a separate test device and non-production test data; do not experiment on the only live register.

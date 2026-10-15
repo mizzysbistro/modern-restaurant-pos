@@ -9,7 +9,7 @@ Last reviewed: 2026-10-16
 - [x] Confirm the native storage bridge and legacy localStorage import.
 - [x] Confirm GitHub Actions runs frontend safety checks, backup schema tests, SQLite JVM tests, Android test compilation, APK build, and APK signer verification.
 - [x] Establish and inspect green CI baselines for commit `418cc283`: [branch push validation](https://github.com/mizzysbistro/modern-restaurant-pos/actions/runs/38817706898) and [pull-request validation (successful retry after a dependency download failure)](https://github.com/mizzysbistro/modern-restaurant-pos/actions/runs/38817712276).
-- [x] Latest development head `2360c8808b40aac542bb58a8558bcb2b4ae75ae2` passed both [push validation](https://github.com/mizzysbistro/modern-restaurant-pos/actions/runs/38822500674) and [pull-request validation](https://github.com/mizzysbistro/modern-restaurant-pos/actions/runs/38822507412), including source parity, Node tests, SQLite JVM tests, and Android/instrumentation-test compilation.
+- [x] Latest code head `53af44369cbf4b0a30cdbab5801321ff9587280a` passed both [push validation](https://github.com/mizzysbistro/modern-restaurant-pos/actions/runs/38823015535) and [pull-request validation](https://github.com/mizzysbistro/modern-restaurant-pos/actions/runs/38823020630), including the verifier, Node tests, SQLite JVM tests, and Android/instrumentation-test compilation.
 - [ ] Verify that the signing certificate on the APK installed on the physical tablet matches the update APK. Repository/CI checks cannot infer the installed app certificate.
 - [ ] Test backup and restore with real tablet/database data before live use.
 
@@ -68,6 +68,8 @@ Last reviewed: 2026-10-16
 - [x] Validate native kitchen tickets before persistence: unique IDs, valid timestamps and order types, explicit ready state, valid dine-in table numbers, and bounded item names/quantities; failure tests confirm saved sales remain intact.
 - [x] Add automated backup validation for optional recoverable carts and checkout context while preserving legacy backup compatibility.
 - [x] Add automated coverage for valid/invalid open table orders, table ownership, active-order context and draft price/name snapshots.
+- [x] Keep backup timestamp validation consistent with native persistence; reject invalid ISO-style timestamps and impossible calendar dates in sales, tickets, adjustment history, and open table orders.
+- [x] Prevent stale kitchen-ticket IDs from colliding with `nextId` in both SQLite validation and backup restore.
 - [ ] Test backup/restore and interrupted writes using a copy of real production-like database data.
 - [ ] Add authenticated staff access control; current void/refund audit staff names are manually entered, not verified identities.
 
@@ -80,7 +82,8 @@ Last reviewed: 2026-10-16
 - [ ] Complete checkout-to-kitchen-to-receipt workflow tests on the target tablet (CI compiles Android/instrumentation tests but cannot run physical hardware acceptance).
 - [ ] Test compatible printer hardware.
 - [x] Document limitations, backup/restore steps, signing/update prerequisites, and recovery actions in `docs/OPERATIONS.md`.
+- [x] Add a controlled, evidence-based target-device release checklist in `docs/ACCEPTANCE_CHECKLIST.md`; the physical acceptance steps remain unchecked until performed.
 
 ## Workflow policy
 
-A check is complete only when supported by a repository change and test/build output. CI success does not substitute for installed-device, real database, or physical printer verification. The current development head has green push and pull-request CI, but keep the PR in draft until the physical-device upgrade, real-data backup/restore, printer, and required display acceptance gates are completed.
+A check is complete only when supported by a repository change and test/build output. CI success does not substitute for installed-device, real database, or physical printer verification. Development code head `53af44369cbf4b0a30cdbab5801321ff9587280a` has green push and pull-request CI. Keep the PR in draft until the physical-device upgrade, real-data backup/restore, offline workflow, printer, and required display acceptance gates are completed.
