@@ -392,6 +392,24 @@ public final class PosStorageUnitTest {
     }
 
     @Test
+    public void saleAdjustmentHistoryPersistsWithState() throws JSONException {
+        JSONObject root=new JSONObject(VALID_SNAPSHOT),event=new JSONObject().put("id",1).put("time","2026-10-15T10:01:00.000Z").put("saleId",1001).put("action","REFUND").put("amountCents",2500).put("reason","Customer request").put("staff","Mizzy");
+        root.put("saleAdjustments",new JSONArray().put(event));assertTrue(storage.saveState(root.toString()));storage.close();storage=new PosStorage(context,TEST_DATABASE);
+        assertEquals(2500,new JSONObject(storage.loadState()).getJSONArray("saleAdjustments").getJSONObject(0).getInt("amountCents"));
+    }
+    @Test
+    public void normalSaveCannotEraseSaleAdjustmentHistory() throws JSONException {
+        JSONObject root=new JSONObject(VALID_SNAPSHOT),event=new JSONObject().put("id",1).put("time","2026-10-15T10:01:00.000Z").put("saleId",1001).put("action","REFUND").put("amountCents",2500).put("reason","Customer request").put("staff","Mizzy");
+        root.put("saleAdjustments",new JSONArray().put(event));assertTrue(storage.saveState(root.toString()));root.put("saleAdjustments",new JSONArray());assertFalse(storage.saveState(root.toString()));
+        assertEquals(1,new JSONObject(storage.loadState()).getJSONArray("saleAdjustments").length());
+    }
+    @Test
+    public void rejectsRefundAmountsBeyondSaleTotal() throws JSONException {
+        JSONObject root=new JSONObject(VALID_SNAPSHOT),event=new JSONObject().put("id",1).put("time","2026-10-15T10:01:00.000Z").put("saleId",1001).put("action","REFUND").put("amountCents",10001).put("reason","Customer request").put("staff","Mizzy");
+        root.put("saleAdjustments",new JSONArray().put(event));assertFalse(storage.saveState(root.toString()));
+    }
+
+    @Test
     public void rejectsSnapshotsMissingRequiredCollections() {
         assertFalse(storage.saveState("{\"products\":[],\"sales\":[]}"));
         assertEquals("", storage.loadState());

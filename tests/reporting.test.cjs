@@ -47,3 +47,10 @@ test("dateKeyForLocalDate uses local calendar fields", () => {
   assert.equal(dateKeyForLocalDate(new Date(2026,9,15,23,30)),"2026-10-15");
   assert.equal(dateKeyForLocalDate(new Date("invalid")),"");
 });
+
+test("net reports reflect partial refunds and exclude void amounts",()=>{
+ const rows=[sale(1,"2026-10-15T09:00:00",100,"Cash"),sale(2,"2026-10-15T10:00:00",50,"Card"),sale(3,"2026-10-15T11:00:00",25,"Cash")];
+ const adj=[{id:1,time:"2026-10-15T12:00:00Z",saleId:1,action:"REFUND",amountCents:2500,reason:"Partial",staff:"Mizzy"},{id:2,time:"2026-10-15T12:01:00Z",saleId:2,action:"VOID",amountCents:5000,reason:"Void",staff:"Mizzy"}];
+ const result=summarizeSales(rows,"2026-10-15","2026-10-15",adj);
+ assert.equal(result.ok,true);assert.equal(result.gross,100);assert.equal(result.orderCount,2);assert.equal(result.sales.find(s=>s.id===1).netCents,7500);assert.equal(result.sales.find(s=>s.id===2).adjustmentStatus,"VOID");assert.deepEqual(result.paymentBreakdown,[{payment:"Cash",orders:2,total:100}]);
+});

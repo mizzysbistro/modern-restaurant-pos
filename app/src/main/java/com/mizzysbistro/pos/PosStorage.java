@@ -216,7 +216,8 @@ public final class PosStorage extends SQLiteOpenHelper {
             db.beginTransaction();
 
             if (!replaceSales &&
-                !stockAdjustmentHistoryPreserved(db, root.optJSONArray("stockAdjustments"))) {
+                (!stockAdjustmentHistoryPreserved(db, root.optJSONArray("stockAdjustments")) ||
+                 !saleAdjustmentHistoryPreserved(db, root.optJSONArray("saleAdjustments")))) {
                 return false;
             }
 
@@ -486,6 +487,28 @@ public final class PosStorage extends SQLiteOpenHelper {
         return true;
     }
 
+    private boolean saleAdjustmentHistoryPreserved(SQLiteDatabase db,JSONArray incoming)throws JSONException {
+        Cursor cursor=null;try{cursor=db.query(TABLE_STATE,new String[]{"payload"},"id = ?",new String[]{String.valueOf(STATE_ROW_ID)},null,null,null);if(!cursor.moveToFirst())return true;
+        JSONArray prev=new JSONObject(cursor.getString(0)).optJSONArray("saleAdjustments");int oldN=prev==null?0:prev.length(),newN=incoming==null?0:incoming.length();if(oldN==0)return true;if(incoming==null||(newN<oldN&&oldN<10000))return false;
+        long maxId=0;for(int i=0;i<oldN;i++){JSONObject e=prev.optJSONObject(i);if(e==null)return false;maxId=Math.max(maxId,saleId(e));}
+        for(int start=0;start<=oldN;start++){if(start>0&&oldN!=10000)continue;int n=oldN-start;if(newN<n||(start>0&&newN!=10000))continue;boolean same=true;
+          for(int i=0;i<n;i++)if(!jsonValuesEqual(prev.opt(i+start),incoming.opt(i))){same=false;break;}if(!same)continue;long last=maxId;
+          for(int i=n;i<newN;i++){JSONObject e=incoming.optJSONObject(i);if(e==null){same=false;break;}long id=saleId(e);if(id<=last){same=false;break;}last=id;}
+          if(same&&(start==0||newN>n))return true;}return false;
+        }finally{if(cursor!=null)cursor.close();}
+    }
+    private boolean isValidSaleAdjustments(JSONObject root,JSONArray sales) {
+        if(!root.has("saleAdjustments"))return true;JSONArray events=root.optJSONArray("saleAdjustments");if(events==null||events.length()>10000)return false;
+        java.util.Map<Long,Long> totals=new java.util.HashMap<>();for(int i=0;i<sales.length();i++){JSONObject s=sales.optJSONObject(i);if(s==null)return false;Object raw=s.opt("total");long id=saleId(s);if(!(raw instanceof Number)||id<1)return false;double total=((Number)raw).doubleValue();if(!Double.isFinite(total)||total<0||total>1_000_000_000d)return false;totals.put(id,Math.round(total*100d));}
+        Set<Long> ids=new HashSet<>();java.util.Map<Long,String> actions=new java.util.HashMap<>();java.util.Map<Long,Long> sums=new java.util.HashMap<>();java.util.Map<Long,Integer> counts=new java.util.HashMap<>();long lastId=0;
+        for(int i=0;i<events.length();i++){JSONObject e=events.optJSONObject(i);if(e==null)return false;long id=saleId(e);Object rawSale=e.opt("saleId"),rawAmount=e.opt("amountCents");if(id<1||id<=lastId||!ids.add(id)||!(rawSale instanceof Number)||!(rawAmount instanceof Number))return false;
+          double ds=((Number)rawSale).doubleValue(),da=((Number)rawAmount).doubleValue();if(!Double.isFinite(ds)||ds<1||ds!=Math.rint(ds)||ds>Long.MAX_VALUE||!Double.isFinite(da)||da<0||da!=Math.rint(da)||da>Long.MAX_VALUE)return false;long sid=(long)ds,amount=(long)da;Long total=totals.get(sid);
+          String action=e.optString("action",""),time=e.optString("time",""),reason=e.optString("reason",""),staff=e.optString("staff","");if(total==null||amount>total||(!"VOID".equals(action)&&!"REFUND".equals(action))||("REFUND".equals(action)&&amount<1)||time.isEmpty()||time.length()>100||reason.trim().isEmpty()||reason.length()>160||staff.trim().isEmpty()||staff.length()>80)return false;
+          String old=actions.get(sid);int count=counts.getOrDefault(sid,0);long sum=sums.getOrDefault(sid,0L);if(old!=null&&!old.equals(action))return false;
+          if("VOID".equals(action)){if(count>0||amount!=total)return false;sums.put(sid,total);}else{if(sum+amount<sum||sum+amount>total)return false;sums.put(sid,sum+amount);}actions.put(sid,action);counts.put(sid,count+1);lastId=id;
+        }return true;
+    }
+
     /** Validate an optional crash-recoverable cart and checkout selection. */
     private boolean isValidOpenCart(JSONObject root, JSONArray products) {
         if (root.has("orderType")) {
@@ -576,6 +599,7 @@ public final class PosStorage extends SQLiteOpenHelper {
                 if (id < 1 || id >= nextIdLong || !seenSaleIds.add(id)) return false;
                 salesById.put(id, sale);
             }
+            if (!isValidSaleAdjustments(root, sales)) return false;
 
             JSONArray openOrders = root.optJSONArray("openOrders");
             if (root.has("openOrders") && openOrders == null) return false;

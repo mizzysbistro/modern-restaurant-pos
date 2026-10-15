@@ -160,6 +160,15 @@
         return failure("The backup sale total does not match its items.");
       }
     }
+    const adjustmentEvents=state.saleAdjustments===undefined?[]:state.saleAdjustments;
+    if(!Array.isArray(adjustmentEvents)||adjustmentEvents.length>10000)return failure("The backup contains invalid sale adjustment history.");
+    const eventIds=new Set(),adjustmentState=new Map();let previousEventId=0;
+    for(const event of adjustmentEvents){
+      if(!event||typeof event!=="object"||!isPositiveSafeInteger(event.id)||event.id<=previousEventId||eventIds.has(event.id)||!isPositiveSafeInteger(event.saleId)||!salesById.has(event.saleId)||typeof event.time!=="string"||!Number.isFinite(Date.parse(event.time))||(event.action!=="VOID"&&event.action!=="REFUND")||!Number.isSafeInteger(event.amountCents)||event.amountCents<0||typeof event.reason!=="string"||!event.reason.trim()||event.reason.length>160||typeof event.staff!=="string"||!event.staff.trim()||event.staff.length>80)return failure("The backup contains invalid sale adjustment history.");
+      previousEventId=event.id;eventIds.add(event.id);const sale=salesById.get(event.saleId),totalCents=Math.round(sale.total*100);if(event.amountCents>totalCents||(event.action==="REFUND"&&event.amountCents<1))return failure("The backup contains invalid sale adjustment history.");
+      const state=adjustmentState.get(event.saleId)||{action:event.action,amount:0,count:0};if(state.action!==event.action)return failure("The backup contains mixed void/refund history for one sale.");
+      if(event.action==="VOID"){if(state.count>0||event.amountCents!==totalCents)return failure("The backup contains invalid sale adjustment history.");state.amount=totalCents}else{if(state.amount+event.amountCents>totalCents)return failure("The backup contains refund history beyond the sale total.");state.amount+=event.amountCents}state.count++;adjustmentState.set(event.saleId,state)
+    }
     const openOrdersById = new Map();
     const openOrderTables = new Set();
     const openOrders = state.openOrders === undefined ? [] : state.openOrders;

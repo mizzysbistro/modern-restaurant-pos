@@ -41,6 +41,7 @@ function validBackup() {
   };
 }
 
+test("validates sale adjustment history",()=>{const b=validBackup();b.state.saleAdjustments=[{id:1,time:"2026-10-15T10:02:00.000Z",saleId:1001,action:"REFUND",amountCents:24500,reason:"Returned item",staff:"Mizzy"}];assert.equal(validateBackupDocument(b).ok,true);b.state.saleAdjustments[0].amountCents=24501;assert.match(validateBackupDocument(b).error,/sale adjustment|refund history/i)});
 test("accepts a valid POS backup and returns its state", () => {
   const backup = validBackup();
   const result = validateBackupDocument(backup);
