@@ -48,5 +48,7 @@ jobs:
         run: node scripts/verify-pos.mjs
       - name: Run backup validation tests
         run: node --test tests/backup-schema.test.cjs
+      - name: Run SQLite unit tests
+        run: gradle --no-daemon testDebugUnitTest
       - name: Compile app and instrumentation tests
         run: gradle --no-daemon assembleDebug assembleDebugAndroidTest
