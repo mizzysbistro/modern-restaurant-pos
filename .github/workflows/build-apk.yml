@@ -19,6 +19,11 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+      - name: Restore persistent debug signing key
+        uses: actions/cache@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: modern-restaurant-pos-debug-signing-v1
       - name: Set up Android SDK
         run: |
           echo "ANDROID_HOME=${ANDROID_HOME:-/usr/local/lib/android/sdk}" >> "$GITHUB_ENV"
@@ -32,6 +37,10 @@ jobs:
           wget -q https://services.gradle.org/distributions/gradle-8.7-bin.zip -O /tmp/gradle.zip
           unzip -q /tmp/gradle.zip -d /tmp
           echo "/tmp/gradle-8.7/bin" >> "$GITHUB_PATH"
+      - name: Set increasing APK version
+        run: |
+          sed -i "s/versionCode 1/versionCode $GITHUB_RUN_NUMBER/" app/build.gradle
+          sed -i "s/versionName '1.0.0'/versionName '1.0.$GITHUB_RUN_NUMBER'/" app/build.gradle
       - name: Build debug APK
         run: gradle --no-daemon assembleDebug
       - name: Upload installable APK
