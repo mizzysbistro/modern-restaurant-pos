@@ -27,6 +27,7 @@ public final class PosStorage extends SQLiteOpenHelper {
     private static final int DATABASE_VERSION = 2;
     private static final String TABLE_STATE = "pos_state";
     private static final String TABLE_SALES = "pos_sales";
+    private static final String LOAD_ERROR = "{\"_posStorageError\":true}";
     private static final int STATE_ROW_ID = 1;
     private static final int MAX_STATE_CHARS = 10 * 1024 * 1024;
 
@@ -139,7 +140,7 @@ public final class PosStorage extends SQLiteOpenHelper {
                 TABLE_STATE, new String[]{"payload"}, "id = ?",
                 new String[]{String.valueOf(STATE_ROW_ID)}, null, null, null
             );
-            if (!stateCursor.moveToFirst()) return "";
+            if (!stateCursor.moveToFirst()) return hasStoredSales(db) ? LOAD_ERROR : "";
 
             JSONObject root = new JSONObject(stateCursor.getString(0));
             JSONArray sales = new JSONArray();
@@ -153,11 +154,23 @@ public final class PosStorage extends SQLiteOpenHelper {
             root.put("sales", sales);
             return root.toString();
         } catch (RuntimeException | JSONException error) {
-            // Do not expose database internals or present a partial snapshot.
-            return "";
+            // A read error is not a first-launch state. The UI recognizes this
+            // sentinel and refuses writes so defaults cannot replace saved data.
+            return LOAD_ERROR;
         } finally {
             if (salesCursor != null) salesCursor.close();
             if (stateCursor != null) stateCursor.close();
+        }
+    }
+
+    /** True if normalized sale history exists without a readable base snapshot. */
+    private boolean hasStoredSales(SQLiteDatabase db) {
+        Cursor cursor = null;
+        try {
+            cursor = db.rawQuery("SELECT 1 FROM " + TABLE_SALES + " LIMIT 1", null);
+            return cursor.moveToFirst();
+        } finally {
+            if (cursor != null) cursor.close();
         }
     }
 

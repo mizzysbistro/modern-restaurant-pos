@@ -77,6 +77,17 @@ public final class PosStorageInstrumentedTest {
     }
 
     @Test
+    public void loadFailureIsExplicitAndDoesNotLookLikeFirstLaunch() {
+        assertTrue(storage.saveState(VALID_SNAPSHOT));
+        assertEquals(1, storage.getWritableDatabase().delete(
+            "pos_state", "id = ?", new String[]{"1"}
+        ));
+        String result = storage.loadState();
+        assertFalse(result.isEmpty());
+        assertTrue(result.contains("_posStorageError"));
+    }
+
+    @Test
     public void rejectsSnapshotsMissingRequiredCollections() {
         assertFalse(storage.saveState("{\"products\":[],\"sales\":[]}"));
         assertEquals("", storage.loadState());

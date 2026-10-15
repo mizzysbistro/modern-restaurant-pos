@@ -131,6 +131,32 @@ public final class PosStorageUnitTest {
     }
 
     @Test
+    public void loadStateReturnsExplicitErrorWhenStoredPayloadIsCorrupt() {
+        assertTrue(storage.saveState(VALID_SNAPSHOT));
+        ContentValues corrupt = new ContentValues();
+        corrupt.put("payload", "{not valid json");
+        assertEquals(1, storage.getWritableDatabase().update(
+            "pos_state", corrupt, "id = ?", new String[]{"1"}
+        ));
+
+        String result = storage.loadState();
+        assertFalse(result.isEmpty());
+        assertTrue(result.contains("_posStorageError"));
+    }
+
+    @Test
+    public void missingSnapshotWithHistoricalSalesIsNotTreatedAsFirstLaunch() {
+        assertTrue(storage.saveState(VALID_SNAPSHOT));
+        assertEquals(1, storage.getWritableDatabase().delete(
+            "pos_state", "id = ?", new String[]{"1"}
+        ));
+
+        String result = storage.loadState();
+        assertFalse(result.isEmpty());
+        assertTrue(result.contains("_posStorageError"));
+    }
+
+    @Test
     public void rejectsSnapshotsMissingRequiredCollections() {
         assertFalse(storage.saveState("{\"products\":[],\"sales\":[]}"));
         assertEquals("", storage.loadState());

@@ -70,7 +70,8 @@ const initial=[
 {id:8,name:"Mango Cream Cup",cat:"Desserts",price:120,emoji:"🥭",art:"art8",tag:"Fan favorite",stock:14},
 {id:9,name:"Bistro Breakfast",cat:"Mains",price:265,emoji:"🍳",art:"art9",tag:"All-day",stock:12}
 ];
-const nativeState=(()=>{try{if(window.PosStorage&&typeof window.PosStorage.loadState==="function"){const raw=window.PosStorage.loadState();return raw?JSON.parse(raw):null}}catch(e){}return null})();
+const nativeLoad=(()=>{try{if(window.PosStorage&&typeof window.PosStorage.loadState==="function"){const raw=window.PosStorage.loadState();if(!raw)return{state:null,failed:false};const parsed=JSON.parse(raw);if(parsed&&parsed._posStorageError===true)return{state:null,failed:true};return{state:parsed,failed:false}}}catch(e){return{state:null,failed:!!window.PosStorage}}return{state:null,failed:false}})();
+const nativeState=nativeLoad.state,nativeStorageUnavailable=nativeLoad.failed;
 const load=(k,d)=>{try{const fromNative=nativeState&&nativeState[k];if(fromNative!==undefined&&fromNative!==null)return fromNative;const raw=localStorage.getItem(STORE+":"+k);return raw===null?d:JSON.parse(raw)}catch(e){return d}};
 let products=load("products",initial),sales=load("sales",[]),stock=load("stock",Object.fromEntries(initial.map(p=>[p.id,p.stock]))),tickets=load("tickets",[]),occupied=load("tables",{}),nextId=load("nextId",1001);
 let cart=new Map(),category="All",orderType="Dine in",tableNo=4,payment="Cash",customer="";
@@ -78,6 +79,7 @@ const money=n=>"₱"+Number(n||0).toLocaleString("en-PH",{minimumFractionDigits:
 const esc=value=>String(value==null?"":value).replace(/[&<>"']/g,char=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char]));
 const $=id=>document.getElementById(id);
 function save(options={}){
+if(nativeStorageUnavailable){notify("Local database could not be read. Changes are disabled to protect saved sales.");return false}
 const snapshot={products,sales,stock,tickets,tables:occupied,nextId};
 if(window.PosStorage){let ok=false;try{const payload=JSON.stringify(snapshot);ok=options.replaceSales===true&&typeof window.PosStorage.restoreState==="function"?window.PosStorage.restoreState(payload)===true:window.PosStorage.saveState(payload)===true}catch(e){ok=false}if(!ok){notify("Local database save failed. The change was not committed.");return false}}
 try{for(const [k,v] of Object.entries(snapshot))localStorage.setItem(STORE+":"+k,JSON.stringify(v))}catch(e){if(!window.PosStorage){notify("Could not save local data. Check device storage.");return false}}
@@ -139,9 +141,10 @@ $("checkout").addEventListener("click",()=>{$("modalTotal").textContent=money([.
 $("confirmPay").addEventListener("click",()=>{if(!cart.size)return;for(const [id,v] of cart){if((stock[id]||0)<v.qty){notify("Insufficient stock for "+(products.find(p=>p.id===id)?.name||"this item"));return}}const items=[...cart].map(([id,v])=>({id,name:products.find(p=>p.id===id).name,price:products.find(p=>p.id===id).price,qty:v.qty}));const total=items.reduce((s,x)=>s+x.price*x.qty,0),sale={id:nextId,time:new Date().toISOString(),type:orderType,table:orderType==="Dine in"?tableNo:null,customer,payment,total,items:items.map(({id,...item})=>item)};const previous={sales:sales.slice(),stock:{...stock},tickets:tickets.slice(),occupied:{...occupied},nextId};nextId++;sales.unshift(sale);for(const [id,v] of cart)stock[id]=(stock[id]||0)-v.qty;if(orderType==="Dine in"){tickets.unshift({...sale,done:false});occupied[tableNo]=sale.id}if(!save()){sales=previous.sales;stock=previous.stock;tickets=previous.tickets;occupied=previous.occupied;nextId=previous.nextId;renderInventory();renderReports();renderTables();return}cart.clear();renderCart();renderMenu();$("payModal").classList.remove("open");renderInventory();renderReports();renderTables();showPage("pos");notify("Saved order #"+sale.id+" · "+money(total));if(confirm("Order saved. Open receipt for printing?"))printReceipt(sale)});
 $("shiftBtn").addEventListener("click",()=>notify("Shift open · "+sales.length+" saved orders"));$("clearKitchen").addEventListener("click",()=>{const previous=tickets;tickets=tickets.filter(t=>!t.done);if(!save()){tickets=previous;return}renderKitchen()});
 renderMenu();renderCart();renderTables();renderInventory();renderReports();
+if(nativeStorageUnavailable){const status=$("connectionStatus");if(status){status.textContent="Local storage error · writes blocked";status.title="The local database could not be read. No changes will be committed. Restart the app after storage is repaired."}notify("Local database could not be read. Changes are disabled to protect saved sales.");}
 // First run after the native database is introduced: migrate the existing
 // WebView localStorage snapshot into SQLite without replacing legacy records.
-if(window.PosStorage&&!nativeState&&!save())notify("Local data migration could not be saved. Do not process real sales until storage is repaired.");
+else if(window.PosStorage&&!nativeState&&!save())notify("Local data migration could not be saved. Do not process real sales until storage is repaired.");
 </script>
 </body>
 </html>
