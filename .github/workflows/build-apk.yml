@@ -34,14 +34,7 @@ jobs:
             echo "::error::The persistent signing key is missing. Refusing to generate a replacement because it would break APK updates. Restore the original key securely."
             exit 1
           else
-            keytool -genkeypair -v \\
-              -keystore .signing/debug.keystore \\
-              -storepass android \\
-              -alias androiddebugkey \\
-              -keypass android \\
-              -keyalg RSA -keysize 2048 -validity 10000 \\
-              -dname "CN=Mizzy's Bistro POS, OU=Development, O=Mizzy's Bistro, C=PH" \\
-              -noprompt
+            keytool -genkeypair -v -keystore .signing/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Mizzy's Bistro POS, OU=Development, O=Mizzy's Bistro, C=PH" -noprompt
           fi
       - name: Set up Android SDK
         run: |
