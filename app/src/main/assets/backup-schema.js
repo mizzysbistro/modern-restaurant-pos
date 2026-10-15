@@ -158,7 +158,7 @@
     for (const [table, saleId] of Object.entries(state.tables)) {
       const tableNumber = Number(table);
       const sale = salesById.get(saleId);
-      if (!/^[1-9]\\d*$/.test(table) || !Number.isSafeInteger(tableNumber) ||
+      if (!/^[1-9]\d*$/.test(table) || !Number.isSafeInteger(tableNumber) ||
           tableNumber < 1 || tableNumber > 12 || !isPositiveSafeInteger(saleId) ||
           !sale || sale.type !== "Dine in" || sale.table !== tableNumber) {
         return failure("The backup contains invalid table occupancy data.");
