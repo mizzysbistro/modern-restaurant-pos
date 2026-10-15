@@ -9,9 +9,14 @@ An offline-first restaurant POS for Android tablets, initially focused on PHP pr
 - POS UI: HTML/CSS/JavaScript; the repository root `index.html` mirrors the in-app preview
 - Durable local state: Android SQLite database through a JavaScript bridge
 - Legacy-data migration: on first launch of a SQLite-enabled build, the current WebView localStorage state is loaded and saved into SQLite without intentionally resetting records
+- JSON backup/restore UI: the Reports page can export the full POS state and restore a validated backup after an explicit replacement confirmation
+- Native Android file saving: backup and CSV export use the Android document picker; restore uses the Android file chooser
+- Native Android receipt print dialog using the system Print Framework (printer compatibility still depends on installed Android print services)
+- Live table occupancy counts, explicit table release, and local-only online/offline status indication
+- HTML escaping for staff-entered menu, kitchen, and receipt text
 - Build automation: GitHub Actions produces a debug APK artifact
 
-The SQLite implementation is currently an **atomic JSON snapshot** of menu, sales, stock, kitchen tickets, table occupancy, and the order counter. It is a safer first step than browser storage alone, but it is not yet a normalized production database. High-volume transaction history, database backups/restoration, open-cart recovery, and full migration tests remain in the roadmap.
+The current SQLite design stores completed sales in an indexed sales table and keeps menu, inventory, kitchen tickets, table occupancy, open orders, and recoverable cart context in an atomic JSON snapshot. It is more durable than browser storage alone, but it is not yet a fully normalized production database. Date-range and payment-method reports are calculated from saved sales, and table orders can be saved, continued, cancelled, and finalized using a stable order ID. The external customer display uses Android's presentation display when available, with a same-tablet fallback. CI covers static data-safety checks, regression tests, SQLite JVM tests, and Android/instrumentation compilation; physical tablet, print, external-display, real-data restore, and in-place upgrade acceptance remain outstanding.
 
 ## Build an APK
 
@@ -24,11 +29,16 @@ Each build increments Android `versionCode`. The workflow currently reuses the A
 
 ## Local development checks
 
-The workflow runs `node scripts/verify-pos.mjs` to parse the POS JavaScript and check critical data-safety rules before assembling the APK.
+The workflows run `node scripts/verify-pos.mjs` and `node --test tests/*.test.cjs`, then run SQLite JVM tests and compile the Android app and instrumentation tests. Pull requests into `main` run the same validation workflow.
+
+## Operations and recovery
+
+See [the POS operations runbook](docs/OPERATIONS.md) before updating the tablet, restoring a backup, or using the POS for live service. Use the [controlled release acceptance checklist](docs/ACCEPTANCE_CHECKLIST.md) to verify signing compatibility, backup/restore, offline checkout, and target hardware before release.
 
 ## Important limitations
 
 - Payment methods shown in the app are records of the selected method, not a real card or GCash gateway.
 - Printer compatibility must be verified with the actual printer model.
-- Cloud backup, multi-device synchronization, staff permissions, refund/void audit flows, and normalized Room/SQLite transaction tables are not yet complete.
+- Void/refund actions create local accounting audit records with staff-entered names and reasons, and adjust net reports. They do not move money or process cash/card/GCash refunds.
+- Cloud backup, multi-device synchronization, authenticated staff permissions, and normalized Room/SQLite transaction tables are not yet complete.
 - Do not use the current build as the sole recordkeeping system for a live restaurant until backup, restore, migration, checkout, offline, and upgrade acceptance tests have passed.

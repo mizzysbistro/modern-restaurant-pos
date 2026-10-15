@@ -5,68 +5,85 @@ Last reviewed: 2026-10-16
 ## Milestone 0 — Inspect and protect
 
 - [x] Confirm repository and Android application ID `com.mizzysbistro.pos`.
-- [x] Confirm current app uses a Java Android Activity with a bundled HTML/CSS/JavaScript WebView UI.
-- [x] Confirm Android `PosStorage` bridge persists a JSON snapshot in SQLite and imports legacy browser localStorage.
-- [x] Confirm GitHub Actions runs frontend data-safety checks, JVM tests, Android test compilation, APK build, and APK signer fingerprint verification.
-- [ ] Establish baseline workflow result and inspect logs for failures.
-- [ ] Verify the signing certificate on the APK currently installed on the tablet. This cannot be inferred from repository source alone.
-- [ ] Confirm backups and restore with real database data before live use.
+- [x] Confirm Java Android Activity with bundled HTML/CSS/JavaScript WebView UI.
+- [x] Confirm the native storage bridge and legacy localStorage import.
+- [x] Confirm GitHub Actions runs frontend safety checks, backup schema tests, SQLite JVM tests, Android test compilation, APK build, and APK signer verification.
+- [x] Establish and inspect green CI baselines for commit `418cc283`: [branch push validation](https://github.com/mizzysbistro/modern-restaurant-pos/actions/runs/38817706898) and [pull-request validation (successful retry after a dependency download failure)](https://github.com/mizzysbistro/modern-restaurant-pos/actions/runs/38817712276).
+- [x] Latest code head `53af44369cbf4b0a30cdbab5801321ff9587280a` passed both [push validation](https://github.com/mizzysbistro/modern-restaurant-pos/actions/runs/38823015535) and [pull-request validation](https://github.com/mizzysbistro/modern-restaurant-pos/actions/runs/38823020630), including the verifier, Node tests, SQLite JVM tests, and Android/instrumentation-test compilation.
+- [ ] Verify that the signing certificate on the APK installed on the physical tablet matches the update APK. Repository/CI checks cannot infer the installed app certificate.
+- [ ] Test backup and restore with real tablet/database data before live use.
 
 ## Current architecture and risks
 
 - Package ID: `com.mizzysbistro.pos` (keep stable).
 - Frontend: `app/src/main/assets/index.html`; root `index.html` is the web preview.
 - Native shell: `app/src/main/java/com/mizzysbistro/pos/MainActivity.java`.
-- Persistence: SQLite JSON snapshot through the native JavaScript bridge. This is durable compared with localStorage alone, but it is not yet a normalized transaction database.
-- Signing: workflow caches a persistent debug keystore. GitHub Actions cache is not durable backup; loss of the key prevents in-place updates signed with that certificate.
-- Current POS logic includes menu, cart, local sales, inventory quantities, basic kitchen tickets, table occupancy, CSV export, and browser receipt printing. This does not yet constitute a production-verified POS.
+- Persistence: SQLite schema v2 stores completed sales in an indexed `pos_sales` table and the remaining POS state in a transactional JSON snapshot. The v1 migration has JVM coverage for preserving sale history. Products, stock, tickets, and inventory audit entries are not yet normalized into separate tables.
+- Data protection: invalid/corrupt reads are distinguished from first launch; routine saves cannot rewrite existing completed sale IDs or erase inventory audit history; sale totals are checked against line items; table occupancy must reference a matching dine-in sale. Report generation now fails closed on unreadable sale timestamps and invalid in-range totals. Native persistence validates timestamp fields and kitchen-ticket structures before accepting a snapshot.
+- Signing: Actions reuses a persistent debug keystore, and CI verifies its APK fingerprint. The Actions cache is not a durable off-platform backup. The certificate on the installed tablet remains unverified.
+- Printer handling opens Android's system print dialog. Physical printer compatibility and tablet acceptance still require hardware tests.
+- Payments are locally recorded payment-method selections, not an integrated card or GCash payment gateway. No cloud synchronization is configured.
 
 ## Roadmap checklist
 
 ### Milestone 1 — Durable data foundation
-- [ ] Inspect `PosStorage` implementation and existing frontend bridge usage.
-- [ ] Add robust snapshot validation and safe failure handling; never replace valid saved data with empty/default data after parse or storage failure.
-- [ ] Add explicit backup/export and restore with validation.
-- [ ] Add persistence and legacy-migration tests.
-- [ ] Plan a versioned migration from JSON snapshot to normalized SQLite transaction tables without destructive resets.
+- [x] Inspect native storage implementation and frontend bridge usage.
+- [x] Validate snapshots and block writes after native database read/parse failures rather than initialize defaults.
+- [x] Add validated full backup export and user-confirmed restore with rollback on save failure.
+- [x] Add persistence, legacy-migration, restore, corruption, error-recovery, and crash-recoverable cart regression tests.
+- [x] Implement versioned v1-to-v2 sales-table migration without intentionally deleting prior sales.
 
 ### Milestone 2 — Core checkout
-- [ ] Validate order totals and payment state in one transaction.
-- [ ] Prevent duplicate checkout and duplicate sale IDs.
-- [ ] Persist immutable sale-line snapshots and audit records.
+- [x] Validate sale line items and line-item totals and commit sale rows plus base POS state in one SQLite transaction.
+- [x] Reject duplicate sale IDs and prevent routine saves from rewriting immutable completed sale payloads.
+- [x] Persist item-name/price/quantity snapshots and stock adjustment events generated by sales.
+- [x] Add append-only void/refund audit events, derived paid/partially-refunded/refunded/void states, and net-of-adjustments reports without changing completed sale rows. Audit names are operator-entered.
 
 ### Milestone 3 — Offline operation
-- [ ] Verify essential checkout and reports with internet disabled.
-- [ ] Add explicit connectivity/sync state before implementing cloud sync.
+- [x] Persist the open cart and checkout selections on each edit, restore after app restart, and atomically clear the draft with the completed sale; tests cover database reopen and invalid draft rejection.
+- [ ] Complete checkout/report acceptance tests with internet explicitly disabled on the target tablet.
+- [x] Display local-only online/offline status; cloud synchronization is explicitly not configured.
 
 ### Milestone 4 — Restaurant operations
-- [ ] Improve inventory adjustment audit and availability handling.
-- [ ] Implement open table orders and safe table release.
-- [ ] Add kitchen ticket state transitions and durable ticket updates.
+- [x] Record manual stock adjustments with a reason, log stock consumption during checkout, and audit initial quantities when new menu items are created (failed saves roll back the product, stock, and audit entry).
+- [x] Validate persisted/backup table occupancy against the matching dine-in sale; table release requires confirmation and rolls back in-memory changes if saving fails.
+- [x] Implement persisted open table orders with start/continue/cancel actions, stable order IDs, kitchen ticket updates, validated table ownership, and checkout settlement of the same order ID. Completed occupied tables cannot be overwritten by direct checkout.
+- [x] Persist kitchen ticket ready-state transitions and roll back the UI change when saving fails.
 
 ### Milestone 5 — Receipts and customer display
-- [ ] Add native printer integration after confirming target printer protocol/model.
-- [ ] Add customer-facing display mode.
+- [x] Integrate the Android system print dialog through the Print Framework.
+- [ ] Verify actual printer model/protocol, receipt layout, paper width, and physical print behavior.
+- [ ] Test customer display on the target tablet with a real external presentation display attached; CI validates parsing and compilation, not physical display routing.
+- [x] Add customer-facing display mode with a validated Android secondary `Presentation` when an external display is connected and a full-screen same-tablet fallback.
 
 ### Milestone 6 — Reporting
-- [ ] Calculate date-range and payment breakdown reports from persisted sales.
-- [ ] Verify totals with known test transactions.
+- [x] Add date-range and payment-method breakdowns calculated from locally persisted sales, including payment-method totals and filtered/all-sales CSV exports.
+- [x] Add regression tests for inclusive date boundaries, payment totals, average order, invalid ranges, and empty days.
+- [x] Add direct refund/void creation tests for refund balance limits, partial-refund/void rules, terminal states, audit metadata, and event limits; add fail-closed report tests for malformed timestamps and totals, with source-parity tests guarding the browser preview.
+- [ ] Reconcile date-range reports against known transactions on the physical tablet and confirm day-boundary behavior under the device's configured time zone.
 
 ### Milestone 7 — Security and production hardening
-- [ ] Audit input validation, bridge exposure, and error recovery.
-- [ ] Test database backup/restore and interrupted writes.
-- [ ] Add staff access control and void/refund audit flows.
+- [x] Add source-level checks for WebView bridge exposure/navigation, HTML escaping, input validation, and persistence error recovery.
+- [x] Reject malformed sale timestamps during native persistence and protect existing sales with JVM and instrumentation regression tests.
+- [x] Validate native kitchen tickets before persistence: unique IDs, valid timestamps and order types, explicit ready state, valid dine-in table numbers, and bounded item names/quantities; failure tests confirm saved sales remain intact.
+- [x] Add automated backup validation for optional recoverable carts and checkout context while preserving legacy backup compatibility.
+- [x] Add automated coverage for valid/invalid open table orders, table ownership, active-order context and draft price/name snapshots.
+- [x] Keep backup timestamp validation consistent with native persistence; reject invalid ISO-style timestamps and impossible calendar dates in sales, tickets, adjustment history, and open table orders.
+- [x] Prevent stale kitchen-ticket IDs from colliding with `nextId` in both SQLite validation and backup restore.
+- [ ] Test backup/restore and interrupted writes using a copy of real production-like database data.
+- [ ] Add authenticated staff access control; current void/refund audit staff names are manually entered, not verified identities.
 
 ### Milestone 8 — Release engineering
-- [ ] Preserve stable signing certificate outside ephemeral cache in a secure durable backup.
-- [ ] Verify build signer and installed APK signer match before in-place upgrade.
-- [ ] Verify upgrade retains existing sales on a test device.
+- [x] Increment APK versionCode in CI and verify the generated APK signature matches the configured persistent keystore.
+- [ ] Preserve the signing certificate in a secure durable backup outside GitHub Actions cache.
+- [ ] Verify installed-app signer match and an in-place upgrade retaining existing sales on a test device.
 
 ### Milestone 9 — Acceptance
-- [ ] Complete checkout-to-kitchen-to-receipt workflow tests.
-- [ ] Test real compatible printer hardware.
-- [ ] Document all limitations and operational recovery steps.
+- [ ] Complete checkout-to-kitchen-to-receipt workflow tests on the target tablet (CI compiles Android/instrumentation tests but cannot run physical hardware acceptance).
+- [ ] Test compatible printer hardware.
+- [x] Document limitations, backup/restore steps, signing/update prerequisites, and recovery actions in `docs/OPERATIONS.md`.
+- [x] Add a controlled, evidence-based target-device release checklist in `docs/ACCEPTANCE_CHECKLIST.md`; the physical acceptance steps remain unchecked until performed.
 
-## Verification policy
+## Workflow policy
 
-A checklist item is complete only when supported by a repository diff, automated test output, build artifact, or documented physical test. Hardware and installed-app checks unavailable to CI must remain explicitly unverified.
+A check is complete only when supported by a repository change and test/build output. CI success does not substitute for installed-device, real database, or physical printer verification. Development code head `53af44369cbf4b0a30cdbab5801321ff9587280a` has green push and pull-request CI. Keep the PR in draft until the physical-device upgrade, real-data backup/restore, offline workflow, printer, and required display acceptance gates are completed.
