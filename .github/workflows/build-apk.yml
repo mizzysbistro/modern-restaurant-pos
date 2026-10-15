@@ -10,7 +10,7 @@ permissions:
 
 concurrency:
   group: mizzy-pos-apk-build
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   build-apk:
