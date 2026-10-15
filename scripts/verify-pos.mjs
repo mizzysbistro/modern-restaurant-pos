@@ -10,12 +10,12 @@ const storage = read("app/src/main/java/com/mizzysbistro/pos/PosStorage.java");
 const gradle = read("app/build.gradle");
 const workflow = read(".github/workflows/build-apk.yml");
 
-const scriptMatch = html.match(/<script>([\\s\\S]*?)<\\/script>/);
+const scriptMatch = html.match(/<script>([\s\S]*?)<\/script>/);
 if (!scriptMatch) throw new Error("POS HTML must include its main script block.");
 new vm.Script(scriptMatch[1], { filename: "app/src/main/assets/index.html" });
 
 const checks = [
-  ["Android application ID is stable", /applicationId\\s+['"]com\\.mizzysbistro\\.pos['"]/.test(gradle)],
+  ["Android application ID is stable", /applicationId\s+['"]com\.mizzysbistro\.pos['"]/.test(gradle)],
   ["WebView injects native SQLite bridge", activity.includes('addJavascriptInterface(posStorage, "PosStorage")')],
   ["WebView bridge navigation is restricted to bundled assets", activity.includes("isTrustedAsset") && activity.includes("shouldOverrideUrlLoading")],
   ["SQLite persists a validated JSON snapshot", storage.includes("isValidSnapshot(payload)") && storage.includes("insertWithOnConflict")],
@@ -31,11 +31,11 @@ const checks = [
 
 const failed = checks.filter(([, passed]) => !passed);
 for (const [label, passed] of checks) {
-  process.stdout.write((passed ? "PASS " : "FAIL ") + label + "\\n");
+  process.stdout.write((passed ? "PASS " : "FAIL ") + label + "\n");
 }
 if (failed.length) {
-  process.stderr.write(`\\n${failed.length} POS verification check(s) failed.\\n`);
+  process.stderr.write(`\n${failed.length} POS verification check(s) failed.\n`);
   process.exitCode = 1;
 } else {
-  process.stdout.write(`\\nAll ${checks.length} POS verification checks passed; JavaScript syntax parsed successfully.\\n`);
+  process.stdout.write(`\nAll ${checks.length} POS verification checks passed; JavaScript syntax parsed successfully.\n`);
 }
