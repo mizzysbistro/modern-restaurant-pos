@@ -12,6 +12,11 @@ function validBackup() {
       products: [
         { id: 1, name: "Chicken Plate", cat: "Mains", price: 245, emoji: "🍗", art: "art1", tag: "Popular" }
       ],
+      openCart: [{ id: 1, qty: 2 }],
+      orderType: "Dine in",
+      tableNo: 4,
+      payment: "Cash",
+      customer: "",
       sales: [
         {
           id: 1001, time: "2026-10-15T10:00:00.000Z", type: "Dine in",
@@ -174,4 +179,35 @@ test("rejects table occupancy outside the configured table range", () => {
   const backup = validBackup();
   backup.state.tables["13"] = 1001;
   assert.match(validateBackupDocument(backup).error, /table occupancy/);
+});
+
+
+test("accepts legacy backups without a saved draft cart", () => {
+  const backup = validBackup();
+  delete backup.state.openCart;
+  delete backup.state.orderType;
+  delete backup.state.tableNo;
+  delete backup.state.payment;
+  delete backup.state.customer;
+  assert.equal(validateBackupDocument(backup).ok, true);
+});
+
+test("rejects a saved cart line for a nonexistent menu item", () => {
+  const backup = validBackup();
+  backup.state.openCart = [{ id: 9999, qty: 1 }];
+  assert.match(validateBackupDocument(backup).error, /invalid open cart/);
+});
+
+test("rejects duplicate or invalid draft quantities", () => {
+  const backup = validBackup();
+  backup.state.openCart = [{ id: 1, qty: 1 }, { id: 1, qty: 2 }];
+  assert.match(validateBackupDocument(backup).error, /invalid open cart/);
+  backup.state.openCart = [{ id: 1, qty: 0 }];
+  assert.match(validateBackupDocument(backup).error, /invalid open cart/);
+});
+
+test("rejects invalid saved checkout context", () => {
+  const backup = validBackup();
+  backup.state.tableNo = 13;
+  assert.match(validateBackupDocument(backup).error, /invalid checkout context/);
 });

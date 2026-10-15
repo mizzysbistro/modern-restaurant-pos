@@ -84,6 +84,34 @@
       productIds.add(product.id);
     }
 
+    if (state.openCart !== undefined) {
+      if (!Array.isArray(state.openCart) || state.openCart.length > 500) {
+        return failure("The backup contains an invalid open cart.");
+      }
+      const openCartIds = new Set();
+      for (const line of state.openCart) {
+        if (!line || typeof line !== "object" ||
+            !isPositiveSafeInteger(line.id) || !productIds.has(line.id) ||
+            openCartIds.has(line.id) || !Number.isSafeInteger(line.qty) ||
+            line.qty < 1 || line.qty > 100000) {
+          return failure("The backup contains an invalid open cart.");
+        }
+        openCartIds.add(line.id);
+      }
+    }
+    if (state.orderType !== undefined && state.orderType !== "Dine in" && state.orderType !== "Takeaway") {
+      return failure("The backup contains invalid checkout context.");
+    }
+    if (state.tableNo !== undefined && (!Number.isSafeInteger(state.tableNo) || state.tableNo < 1 || state.tableNo > 12)) {
+      return failure("The backup contains invalid checkout context.");
+    }
+    if (state.payment !== undefined && (typeof state.payment !== "string" || !state.payment.trim() || state.payment.length > 80)) {
+      return failure("The backup contains invalid checkout context.");
+    }
+    if (state.customer !== undefined && (typeof state.customer !== "string" || state.customer.length > 200)) {
+      return failure("The backup contains invalid checkout context.");
+    }
+
     for (const [id, quantity] of Object.entries(state.stock)) {
       if (!/^\d+$/.test(id) || !isPositiveSafeInteger(Number(id)) ||
           !Number.isSafeInteger(quantity) || quantity < 0 ||

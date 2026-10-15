@@ -85,6 +85,9 @@ const checks = [
   ["Date-range report uses local inclusive date boundaries", reporting.includes("parseLocalDateKey") && reporting.includes("endExclusive.setDate(endExclusive.getDate() + 1)") && scriptMatch[1].includes("MizzyReports.summarizeSales(sales,startDate,endDate)")],
   ["Reports expose payment-method totals and separate all-sales export", scriptMatch[1].includes("Payment breakdown") && scriptMatch[1].includes("exportSalesCsv(reportRows") && scriptMatch[1].includes("exportSalesCsv(sales")],
   ["Reporting helper regression tests cover date boundaries, totals, and invalid ranges", reportingTests.includes("includes both boundary dates") && reportingTests.includes("groups payment totals") && reportingTests.includes("rejects invalid calendar dates")],
+  ["Open cart and checkout context persist in native state and backups", scriptMatch[1].includes("openCart:serializeOpenCart()") && scriptMatch[1].includes("orderType,tableNo,payment,customer") && storage.includes("isValidOpenCart(root, products)") && backupSchema.includes("The backup contains an invalid open cart.")],
+  ["Checkout clears the draft before saving and restores it after a failed write", scriptMatch[1].includes("cart.clear();if(!save()){") && scriptMatch[1].includes("cart=previous.cart;renderCart();")],
+  ["Native/device tests cover draft recovery and invalid cart lines", unitTests.includes("openCartAndCheckoutContextPersistAcrossDatabaseReopen") && instrumentation.includes("openCartAndCheckoutContextPersistAcrossDatabaseReopen") && unitTests.includes("invalidOpenCartCannotReplacePreviouslySavedDraft") && instrumentation.includes("invalidOpenCartCannotReplacePreviouslySavedDraft") && backupTests.includes("rejects a saved cart line for a nonexistent menu item")],
 ];
 
 const failed = checks.filter(([, passed]) => !passed);
