@@ -375,6 +375,23 @@ public final class PosStorageUnitTest {
     }
 
     @Test
+    public void rejectsOpenCartWithInvalidOptionalPriceSnapshot() throws JSONException {
+        JSONObject root = new JSONObject(VALID_SNAPSHOT);
+        JSONArray cart = new JSONArray();
+        cart.put(new JSONObject().put("id", 1).put("qty", 1).put("name", "Chicken").put("price", -1));
+        root.put("openCart", cart);
+        assertFalse(storage.saveState(root.toString()));
+
+        cart.put(new JSONObject().put("id", 1).put("qty", 1).put("name", "Chicken").put("price", 100));
+        root.put("openCart", cart);
+        assertFalse(storage.saveState(root.toString()));
+
+        cart = new JSONArray().put(new JSONObject().put("id", 1).put("qty", 1).put("name", "Chicken").put("price", 100));
+        root.put("openCart", cart);
+        assertTrue(storage.saveState(root.toString()));
+    }
+
+    @Test
     public void rejectsSnapshotsMissingRequiredCollections() {
         assertFalse(storage.saveState("{\"products\":[],\"sales\":[]}"));
         assertEquals("", storage.loadState());

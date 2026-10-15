@@ -529,6 +529,17 @@ public final class PosStorage extends SQLiteOpenHelper {
             double quantity = ((Number) rawQuantity).doubleValue();
             if (!Double.isFinite(quantity) || quantity != Math.rint(quantity) ||
                 quantity < 1 || quantity > 100000) return false;
+            if (line.has("name")) {
+                Object rawName = line.opt("name");
+                if (!(rawName instanceof String) || ((String) rawName).trim().isEmpty() ||
+                    ((String) rawName).length() > 200) return false;
+            }
+            if (line.has("price")) {
+                Object rawPrice = line.opt("price");
+                if (!(rawPrice instanceof Number)) return false;
+                double price = ((Number) rawPrice).doubleValue();
+                if (!Double.isFinite(price) || price < 0 || price > 100_000_000d) return false;
+            }
         }
         return true;
     }

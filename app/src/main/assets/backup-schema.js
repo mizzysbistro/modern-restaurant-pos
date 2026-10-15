@@ -93,7 +93,9 @@
         if (!line || typeof line !== "object" ||
             !isPositiveSafeInteger(line.id) || !productIds.has(line.id) ||
             openCartIds.has(line.id) || !Number.isSafeInteger(line.qty) ||
-            line.qty < 1 || line.qty > 100000) {
+            line.qty < 1 || line.qty > 100000 ||
+            (line.name !== undefined && (typeof line.name !== "string" || !line.name.trim() || line.name.length > 200)) ||
+            (line.price !== undefined && (!Number.isFinite(line.price) || line.price < 0 || line.price > 100000000))) {
           return failure("The backup contains an invalid open cart.");
         }
         openCartIds.add(line.id);

@@ -259,3 +259,18 @@ test("rejects active table context that points to a missing open order", () => {
   backup.state.tableNo = 5;
   assert.match(validateBackupDocument(backup).error, /invalid active table order context/);
 });
+
+
+test("rejects out-of-range prices or invalid names in the saved open cart", () => {
+  const backup = validBackup();
+  backup.state.openCart = [{ id: 1, qty: 1, name: "Chicken", price: -1 }];
+  assert.match(validateBackupDocument(backup).error, /invalid open cart/);
+  backup.state.openCart = [{ id: 1, qty: 1, name: " ".repeat(2), price: 100 }];
+  assert.match(validateBackupDocument(backup).error, /invalid open cart/);
+});
+
+test("accepts legacy draft cart lines without name and price snapshots", () => {
+  const backup = validBackup();
+  backup.state.openCart = [{ id: 1, qty: 2 }];
+  assert.equal(validateBackupDocument(backup).ok, true);
+});
