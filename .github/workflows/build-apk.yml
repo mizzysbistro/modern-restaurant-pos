@@ -30,6 +30,7 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+          cache: gradle
       - name: Restore explicit debug signing key
         id: restore-signing
         uses: actions/cache/restore@v4

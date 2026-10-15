@@ -8,7 +8,7 @@ Last reviewed: 2026-10-16
 - [x] Confirm Java Android Activity with bundled HTML/CSS/JavaScript WebView UI.
 - [x] Confirm the native storage bridge and legacy localStorage import.
 - [x] Confirm GitHub Actions runs frontend safety checks, backup schema tests, SQLite JVM tests, Android test compilation, APK build, and APK signer verification.
-- [x] Establish and inspect green CI baselines: [main APK build with JavaScript regression tests](https://github.com/mizzysbistro/modern-restaurant-pos/actions/runs/38801784149), [latest pull-request validation](https://github.com/mizzysbistro/modern-restaurant-pos/actions/runs/38802277366), and [latest branch validation in progress](https://github.com/mizzysbistro/modern-restaurant-pos/actions/runs/38802270737).
+- [x] Establish and inspect green CI baselines for commit `418cc283`: [branch push validation](https://github.com/mizzysbistro/modern-restaurant-pos/actions/runs/38817706898) and [pull-request validation (successful retry after a dependency download failure)](https://github.com/mizzysbistro/modern-restaurant-pos/actions/runs/38817712276).
 - [ ] Verify that the signing certificate on the APK installed on the physical tablet matches the update APK. Repository/CI checks cannot infer the installed app certificate.
 - [ ] Test backup and restore with real tablet/database data before live use.
 
@@ -44,7 +44,7 @@ Last reviewed: 2026-10-16
 - [x] Display local-only online/offline status; cloud synchronization is explicitly not configured.
 
 ### Milestone 4 — Restaurant operations
-- [x] Record manual stock adjustments with a reason and log stock consumption during checkout.
+- [x] Record manual stock adjustments with a reason, log stock consumption during checkout, and audit initial quantities when new menu items are created (failed saves roll back the product, stock, and audit entry).
 - [x] Validate persisted/backup table occupancy against the matching dine-in sale; table release requires confirmation and rolls back in-memory changes if saving fails.
 - [x] Implement persisted open table orders with start/continue/cancel actions, stable order IDs, kitchen ticket updates, validated table ownership, and checkout settlement of the same order ID. Completed occupied tables cannot be overwritten by direct checkout.
 - [x] Persist kitchen ticket ready-state transitions and roll back the UI change when saving fails.
