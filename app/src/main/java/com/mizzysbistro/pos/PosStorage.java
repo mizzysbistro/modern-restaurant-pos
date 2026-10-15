@@ -510,11 +510,38 @@ public final class PosStorage extends SQLiteOpenHelper {
             }
             long nextIdLong = (long) nextIdValue;
             Set<Long> seenSaleIds = new HashSet<>();
+            java.util.Map<Long, JSONObject> salesById = new java.util.HashMap<>();
             for (int i = 0; i < sales.length(); i++) {
                 JSONObject sale = sales.optJSONObject(i);
                 if (sale == null) return false;
                 long id = saleId(sale);
                 if (id < 1 || id >= nextIdLong || !seenSaleIds.add(id)) return false;
+                salesById.put(id, sale);
+            }
+
+            java.util.Iterator<String> tableKeys = tables.keys();
+            while (tableKeys.hasNext()) {
+                String tableKey = tableKeys.next();
+                Object rawTableSaleId = tables.opt(tableKey);
+                if (!tableKey.matches("[1-9][0-9]*") ||
+                    !(rawTableSaleId instanceof Number)) return false;
+                int tableNumber;
+                try {
+                    tableNumber = Integer.parseInt(tableKey);
+                } catch (NumberFormatException error) {
+                    return false;
+                }
+                double rawIdValue = ((Number) rawTableSaleId).doubleValue();
+                if (tableNumber < 1 || tableNumber > 12 ||
+                    !Double.isFinite(rawIdValue) || rawIdValue < 1 ||
+                    rawIdValue != Math.rint(rawIdValue) || rawIdValue > Long.MAX_VALUE) {
+                    return false;
+                }
+                JSONObject tableSale = salesById.get((long) rawIdValue);
+                if (tableSale == null || !"Dine in".equals(tableSale.optString("type", "")) ||
+                    tableSale.optInt("table", -1) != tableNumber) {
+                    return false;
+                }
             }
             return true;
         } catch (JSONException error) {

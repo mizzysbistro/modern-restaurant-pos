@@ -93,6 +93,7 @@
     }
 
     const saleIds = new Set();
+    const salesById = new Map();
     let highestSaleId = 0;
     for (const sale of state.sales) {
       if (!sale || typeof sale !== "object" ||
@@ -108,6 +109,7 @@
         return failure("The backup contains an invalid sale record.");
       }
       saleIds.add(sale.id);
+      salesById.set(sale.id, sale);
       highestSaleId = Math.max(highestSaleId, sale.id);
       let itemsTotal = 0;
       for (const item of sale.items) {
@@ -154,8 +156,11 @@
     }
 
     for (const [table, saleId] of Object.entries(state.tables)) {
-      if (!/^\d+$/.test(table) || Number(table) < 1 ||
-          !isPositiveSafeInteger(saleId)) {
+      const tableNumber = Number(table);
+      const sale = salesById.get(saleId);
+      if (!/^[1-9]\\d*$/.test(table) || !Number.isSafeInteger(tableNumber) ||
+          tableNumber < 1 || tableNumber > 12 || !isPositiveSafeInteger(saleId) ||
+          !sale || sale.type !== "Dine in" || sale.table !== tableNumber) {
         return failure("The backup contains invalid table occupancy data.");
       }
     }

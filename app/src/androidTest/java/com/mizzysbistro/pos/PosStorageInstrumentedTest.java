@@ -184,6 +184,15 @@ public final class PosStorageInstrumentedTest {
     }
 
     @Test
+    public void rejectsTableOccupancyWithoutMatchingDineInSale() throws JSONException {
+        JSONObject root = new JSONObject(VALID_SNAPSHOT);
+        JSONObject tables = new JSONObject();
+        tables.put("4", 9999);
+        root.put("tables", tables);
+        assertFalse(storage.saveState(root.toString()));
+    }
+
+    @Test
     public void rejectsSnapshotsMissingRequiredCollections() {
         assertFalse(storage.saveState("{\"products\":[],\"sales\":[]}"));
         assertEquals("", storage.loadState());

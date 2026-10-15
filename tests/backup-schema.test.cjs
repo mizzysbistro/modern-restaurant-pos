@@ -155,3 +155,23 @@ test("rejects duplicate stock adjustment IDs", () => {
   backup.state.stockAdjustments.push({ ...backup.state.stockAdjustments[0] });
   assert.match(validateBackupDocument(backup).error, /invalid stock adjustment history/);
 });
+
+
+test("rejects table occupancy that points to no saved sale", () => {
+  const backup = validBackup();
+  backup.state.tables["2"] = 9999;
+  assert.match(validateBackupDocument(backup).error, /table occupancy/);
+});
+
+test("rejects table occupancy for a different table than the sale", () => {
+  const backup = validBackup();
+  backup.state.tables["3"] = 1001;
+  delete backup.state.tables["2"];
+  assert.match(validateBackupDocument(backup).error, /table occupancy/);
+});
+
+test("rejects table occupancy outside the configured table range", () => {
+  const backup = validBackup();
+  backup.state.tables["13"] = 1001;
+  assert.match(validateBackupDocument(backup).error, /table occupancy/);
+});
