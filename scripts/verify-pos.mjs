@@ -48,7 +48,11 @@ const checks = [
   ["Kitchen ticket and receipt text is HTML-escaped", scriptMatch[1].includes("esc(x.name)") && scriptMatch[1].includes("esc(s.payment)")],
   ["CSV export uses native Android file picker when available", scriptMatch[1].includes('exportTextFile("mizzy-bistro-sales.csv","text/csv",csv)')],
   ["Backup schema validates table numbers", backupSchema.includes("sale.table > 12") && backupSchema.includes("ticket.table > 12")],
-  ["Backup schema validates explicit kitchen ticket status", backupSchema.includes('typeof ticket.done !== "boolean"')]
+  ["Backup schema validates explicit kitchen ticket status", backupSchema.includes('typeof ticket.done !== "boolean"')],
+  ["POS displays honest offline and local-only storage status", scriptMatch[1].includes("Offline mode · local save only") && scriptMatch[1].includes("cloud synchronization is not configured")],
+  ["Table occupancy counts derive from saved table state", scriptMatch[1].includes("occupiedCount") && scriptMatch[1].includes("data-release-table")],
+  ["Receipt printing uses Android PrintManager in the native app", activity.includes("PrintManager") && activity.includes("createPrintDocumentAdapter") && scriptMatch[1].includes("window.PosFiles.printReceipt(JSON.stringify(s))")],
+  ["Receipt HTML escapes names and payment details", activity.includes("escapeHtml(name)") && activity.includes("escapeHtml(payment)")]
 ];
 
 const failed = checks.filter(([, passed]) => !passed);
