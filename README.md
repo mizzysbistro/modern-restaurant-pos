@@ -39,5 +39,6 @@ See [the POS operations runbook](docs/OPERATIONS.md) before updating the tablet,
 
 - Payment methods shown in the app are records of the selected method, not a real card or GCash gateway.
 - Printer compatibility must be verified with the actual printer model.
-- Cloud backup, multi-device synchronization, staff permissions, refund/void audit flows, and normalized Room/SQLite transaction tables are not yet complete.
+- Void/refund actions create local accounting audit records with staff-entered names and reasons, and adjust net reports. They do not move money or process cash/card/GCash refunds.
+- Cloud backup, multi-device synchronization, authenticated staff permissions, and normalized Room/SQLite transaction tables are not yet complete.
 - Do not use the current build as the sole recordkeeping system for a live restaurant until backup, restore, migration, checkout, offline, and upgrade acceptance tests have passed.
