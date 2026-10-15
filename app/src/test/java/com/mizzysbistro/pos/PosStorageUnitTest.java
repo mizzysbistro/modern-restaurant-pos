@@ -167,6 +167,15 @@ public final class PosStorageUnitTest {
     }
 
     @Test
+    public void rejectsSaleWhenTotalDoesNotMatchItemSubtotal() throws JSONException {
+        assertTrue(storage.saveState(VALID_SNAPSHOT));
+        JSONObject invalidSale = new JSONObject(SECOND_SALE);
+        invalidSale.put("total", 51);
+        assertFalse(storage.saveState(snapshot("[" + invalidSale + "]", 1003)));
+        assertSaleIds(storage.loadState(), 1001L);
+    }
+
+    @Test
     public void rejectsNextIdThatWouldReuseAnExistingSaleId() throws JSONException {
         assertTrue(storage.saveState(VALID_SNAPSHOT));
         assertFalse(storage.saveState(snapshot("[" + FIRST_SALE + "]", 1001)));

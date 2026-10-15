@@ -76,7 +76,7 @@
       if (!sale || typeof sale !== "object" ||
           !isPositiveSafeInteger(sale.id) || saleIds.has(sale.id) ||
           typeof sale.time !== "string" || !Number.isFinite(Date.parse(sale.time)) ||
-          !Array.isArray(sale.items) || sale.items.length > LIMITS.itemsPerSale ||
+          !Array.isArray(sale.items) || sale.items.length < 1 || sale.items.length > LIMITS.itemsPerSale ||
           !Number.isFinite(sale.total) || sale.total < 0 ||
           sale.total > 1000000000 || typeof sale.payment !== "string" ||
           sale.payment.length > 80 ||
@@ -87,6 +87,7 @@
       }
       saleIds.add(sale.id);
       highestSaleId = Math.max(highestSaleId, sale.id);
+      let itemsTotal = 0;
       for (const item of sale.items) {
         if (!item || typeof item !== "object" ||
             typeof item.name !== "string" || !item.name.trim() ||
@@ -96,6 +97,13 @@
             item.price > 100000000) {
           return failure("The backup contains invalid sale items.");
         }
+        itemsTotal += item.price * item.qty;
+        if (!Number.isFinite(itemsTotal) || itemsTotal > 1000000000) {
+          return failure("The backup contains invalid sale totals.");
+        }
+      }
+      if (Math.round(itemsTotal * 100) !== Math.round(sale.total * 100)) {
+        return failure("The backup sale total does not match its items.");
       }
     }
     if (state.nextId <= highestSaleId) {

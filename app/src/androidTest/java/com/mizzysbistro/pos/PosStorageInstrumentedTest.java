@@ -97,6 +97,17 @@ public final class PosStorageInstrumentedTest {
     }
 
     @Test
+    public void rejectsSaleWhenTotalDoesNotMatchItemSubtotal() throws JSONException {
+        assertTrue(storage.saveState(VALID_SNAPSHOT));
+        String invalidSale =
+            "{\"id\":1002,\"time\":\"2026-10-15T11:00:00.000Z\",\"type\":\"Takeaway\"," +
+            "\"table\":null,\"payment\":\"Cash\",\"total\":51," +
+            "\"items\":[{\"name\":\"Tea\",\"price\":50,\"qty\":1}]}";
+        assertFalse(storage.saveState(snapshot(invalidSale, 1003)));
+        assertSaleIds(storage.loadState(), 1001L);
+    }
+
+    @Test
     public void rejectsNextIdThatWouldReuseAnExistingSaleId() throws JSONException {
         assertTrue(storage.saveState(VALID_SNAPSHOT));
         assertFalse(storage.saveState(snapshot(SALE, 1001)));

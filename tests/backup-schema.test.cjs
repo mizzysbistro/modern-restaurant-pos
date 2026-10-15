@@ -119,3 +119,16 @@ test("rejects kitchen tickets with an invalid table", () => {
   backup.state.tickets[0].table = 0;
   assert.match(validateBackupDocument(backup).error, /invalid kitchen ticket/);
 });
+
+
+test("rejects a sale total that does not equal its line items", () => {
+  const backup = validBackup();
+  backup.state.sales[0].total = 246;
+  assert.match(validateBackupDocument(backup).error, /total does not match/);
+});
+
+test("rejects completed sales with no line items", () => {
+  const backup = validBackup();
+  backup.state.sales[0].items = [];
+  assert.match(validateBackupDocument(backup).error, /invalid sale record/);
+});

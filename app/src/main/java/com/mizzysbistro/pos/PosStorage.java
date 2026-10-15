@@ -318,16 +318,53 @@ public final class PosStorage extends SQLiteOpenHelper {
         String soldAt = sale.optString("time", "");
         String payment = sale.optString("payment", "");
         String type = sale.optString("type", "");
+        Object rawTable = sale.opt("table");
         JSONArray items = sale.optJSONArray("items");
         if (saleId < 1 || !(rawTotal instanceof Number) ||
             !Double.isFinite(((Number) rawTotal).doubleValue()) ||
             ((Number) rawTotal).doubleValue() < 0 ||
+            ((Number) rawTotal).doubleValue() > 1_000_000_000d ||
             soldAt.isEmpty() || soldAt.length() > 100 ||
-            payment.isEmpty() || payment.length() > 80 ||
+            payment.trim().isEmpty() || payment.length() > 80 ||
             !("Dine in".equals(type) || "Takeaway".equals(type)) ||
-            items == null || items.length() > 500) {
+            items == null || items.length() < 1 || items.length() > 500) {
             return false;
         }
+
+        if ("Dine in".equals(type)) {
+            if (!(rawTable instanceof Number)) return false;
+            double table = ((Number) rawTable).doubleValue();
+            if (!Double.isFinite(table) || table != Math.rint(table) || table < 1 || table > 12) {
+                return false;
+            }
+        } else if (rawTable != null && rawTable != JSONObject.NULL) {
+            return false;
+        }
+
+        double itemsTotal = 0;
+        for (int i = 0; i < items.length(); i++) {
+            JSONObject item = items.optJSONObject(i);
+            if (item == null) return false;
+            String name = item.optString("name", "");
+            Object rawPrice = item.opt("price");
+            Object rawQuantity = item.opt("qty");
+            if (name.trim().isEmpty() || name.length() > 200 ||
+                !(rawPrice instanceof Number) || !(rawQuantity instanceof Number)) {
+                return false;
+            }
+            double price = ((Number) rawPrice).doubleValue();
+            double quantity = ((Number) rawQuantity).doubleValue();
+            if (!Double.isFinite(price) || price < 0 || price > 100_000_000d ||
+                !Double.isFinite(quantity) || quantity < 1 ||
+                quantity != Math.rint(quantity) || quantity > 100_000) {
+                return false;
+            }
+            itemsTotal += price * quantity;
+            if (!Double.isFinite(itemsTotal) || itemsTotal > 1_000_000_000d) return false;
+        }
+        long totalCents = Math.round(((Number) rawTotal).doubleValue() * 100d);
+        long itemsCents = Math.round(itemsTotal * 100d);
+        if (totalCents != itemsCents) return false;
 
         ContentValues values = new ContentValues();
         values.put("sale_id", saleId);
