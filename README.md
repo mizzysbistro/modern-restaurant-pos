@@ -9,9 +9,11 @@ An offline-first restaurant POS for Android tablets, initially focused on PHP pr
 - POS UI: HTML/CSS/JavaScript; the repository root `index.html` mirrors the in-app preview
 - Durable local state: Android SQLite database through a JavaScript bridge
 - Legacy-data migration: on first launch of a SQLite-enabled build, the current WebView localStorage state is loaded and saved into SQLite without intentionally resetting records
+- JSON backup/restore UI: the Reports page can export the full POS state and restore a validated backup after an explicit replacement confirmation
+- Native Android file saving: backup export uses the Android document picker; restore uses the Android file chooser
 - Build automation: GitHub Actions produces a debug APK artifact
 
-The SQLite implementation is currently an **atomic JSON snapshot** of menu, sales, stock, kitchen tickets, table occupancy, and the order counter. It is a safer first step than browser storage alone, but it is not yet a normalized production database. High-volume transaction history, database backups/restoration, open-cart recovery, and full migration tests remain in the roadmap.
+The SQLite implementation is currently an **atomic JSON snapshot** of menu, sales, stock, kitchen tickets, table occupancy, and the order counter. It is a safer first step than browser storage alone, but it is not yet a normalized production database. High-volume transaction history, open-cart recovery, database migration hardening, and tablet update acceptance tests remain in the roadmap. The JSON backup feature is under validation and must be tested on the physical tablet before relying on it.
 
 ## Build an APK
 
