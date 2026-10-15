@@ -80,7 +80,9 @@
           !Number.isFinite(sale.total) || sale.total < 0 ||
           sale.total > 1000000000 || typeof sale.payment !== "string" ||
           sale.payment.length > 80 ||
-          (sale.type !== "Dine in" && sale.type !== "Takeaway")) {
+          (sale.type !== "Dine in" && sale.type !== "Takeaway") ||
+          (sale.type === "Dine in" && (!Number.isSafeInteger(sale.table) || sale.table < 1 || sale.table > 12)) ||
+          (sale.type === "Takeaway" && sale.table != null)) {
         return failure("The backup contains an invalid sale record.");
       }
       saleIds.add(sale.id);
@@ -106,7 +108,10 @@
           !isPositiveSafeInteger(ticket.id) || ticketIds.has(ticket.id) ||
           !Array.isArray(ticket.items) || ticket.items.length > LIMITS.itemsPerTicket ||
           typeof ticket.time !== "string" || !Number.isFinite(Date.parse(ticket.time)) ||
-          (ticket.type !== "Dine in" && ticket.type !== "Takeaway")) {
+          typeof ticket.done !== "boolean" ||
+          (ticket.type !== "Dine in" && ticket.type !== "Takeaway") ||
+          (ticket.type === "Dine in" && (!Number.isSafeInteger(ticket.table) || ticket.table < 1 || ticket.table > 12)) ||
+          (ticket.type === "Takeaway" && ticket.table != null)) {
         return failure("The backup contains an invalid kitchen ticket.");
       }
       ticketIds.add(ticket.id);
