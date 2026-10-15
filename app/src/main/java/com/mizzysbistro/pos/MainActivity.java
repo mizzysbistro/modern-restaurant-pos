@@ -31,11 +31,15 @@ import java.util.Locale;
 public class MainActivity extends Activity {
     private static final int REQUEST_CREATE_BACKUP = 4102;
     private static final int REQUEST_FILE_CHOOSER = 4103;
+    private static final int REQUEST_CREATE_EXPORT = 4104;
     private static final int MAX_BACKUP_CHARS = 10 * 1024 * 1024;
 
     private WebView webView;
     private PosStorage posStorage;
     private String pendingBackupJson;
+    private String pendingExportText;
+    private String pendingExportName;
+    private String pendingExportMime;
     private ValueCallback<Uri[]> fileChooserCallback;
 
     private boolean isTrustedAsset(String url) {
@@ -79,6 +83,24 @@ public class MainActivity extends Activity {
         }
     }
 
+    private void beginTextExport(String filename, String mimeType, String content) {
+        pendingExportText = content;
+        pendingExportName = filename;
+        pendingExportMime = mimeType;
+        Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType(mimeType);
+        intent.putExtra(Intent.EXTRA_TITLE, filename);
+        try {
+            startActivityForResult(intent, REQUEST_CREATE_EXPORT);
+        } catch (ActivityNotFoundException error) {
+            pendingExportText = null;
+            pendingExportName = null;
+            pendingExportMime = null;
+            Toast.makeText(this, "No file picker is available to save this file.", Toast.LENGTH_LONG).show();
+        }
+    }
+
     /** Native file operations are exposed only to the bundled local POS page. */
     public final class PosFilesBridge {
         @JavascriptInterface
@@ -90,6 +112,21 @@ public class MainActivity extends Activity {
                 return;
             }
             runOnUiThread(() -> beginBackupExport(json));
+        }
+
+        @JavascriptInterface
+        public void exportTextFile(String filename, String mimeType, String content) {
+            if (filename == null || filename.isEmpty() || filename.length() > 120 ||
+                filename.contains("/") || filename.contains("\\\\") ||
+                content == null || content.length() > MAX_BACKUP_CHARS ||
+                !("text/csv".equals(mimeType) || "application/json".equals(mimeType))) {
+                runOnUiThread(() -> Toast.makeText(
+                    MainActivity.this, "The file could not be exported. Check the data size and format.",
+                    Toast.LENGTH_LONG
+                ).show());
+                return;
+            }
+            runOnUiThread(() -> beginTextExport(filename, mimeType, content));
         }
     }
 
@@ -218,6 +255,24 @@ public class MainActivity extends Activity {
                 Toast.makeText(this, "POS backup saved successfully.", Toast.LENGTH_LONG).show();
             } catch (IOException error) {
                 Toast.makeText(this, "Could not save the POS backup. Choose another location.", Toast.LENGTH_LONG).show();
+            }
+            return;
+        }
+
+        if (requestCode == REQUEST_CREATE_EXPORT) {
+            String text = pendingExportText;
+            String filename = pendingExportName;
+            pendingExportText = null;
+            pendingExportName = null;
+            pendingExportMime = null;
+            if (resultCode != RESULT_OK || data == null || data.getData() == null || text == null) return;
+            try (OutputStream output = getContentResolver().openOutputStream(data.getData(), "wt")) {
+                if (output == null) throw new IOException("Could not open the selected export file.");
+                output.write(text.getBytes(StandardCharsets.UTF_8));
+                output.flush();
+                Toast.makeText(this, "Saved " + (filename == null ? "export" : filename) + ".", Toast.LENGTH_LONG).show();
+            } catch (IOException error) {
+                Toast.makeText(this, "Could not save the export. Choose another location.", Toast.LENGTH_LONG).show();
             }
             return;
         }
