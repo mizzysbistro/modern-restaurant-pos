@@ -101,3 +101,21 @@ test("rejects unreasonably large menu and sales collections", () => {
   }));
   assert.match(validateBackupDocument(backup).error, /too many records/);
 });
+
+test("rejects a dine-in sale assigned to an invalid table", () => {
+  const backup = validBackup();
+  backup.state.sales[0].table = 99;
+  assert.match(validateBackupDocument(backup).error, /invalid sale record/);
+});
+
+test("rejects kitchen tickets without an explicit status", () => {
+  const backup = validBackup();
+  delete backup.state.tickets[0].done;
+  assert.match(validateBackupDocument(backup).error, /invalid kitchen ticket/);
+});
+
+test("rejects kitchen tickets with an invalid table", () => {
+  const backup = validBackup();
+  backup.state.tickets[0].table = 0;
+  assert.match(validateBackupDocument(backup).error, /invalid kitchen ticket/);
+});
