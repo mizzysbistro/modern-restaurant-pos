@@ -117,7 +117,7 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public void exportTextFile(String filename, String mimeType, String content) {
             if (filename == null || filename.isEmpty() || filename.length() > 120 ||
-                filename.contains("/") || filename.contains("\\\\") ||
+                filename.contains("/") || filename.contains("\\") ||
                 content == null || content.length() > MAX_BACKUP_CHARS ||
                 !("text/csv".equals(mimeType) || "application/json".equals(mimeType))) {
                 runOnUiThread(() -> Toast.makeText(
