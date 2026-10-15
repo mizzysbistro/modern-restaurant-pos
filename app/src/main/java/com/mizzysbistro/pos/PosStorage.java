@@ -268,10 +268,48 @@ public final class PosStorage extends SQLiteOpenHelper {
             );
             if (!cursor.moveToFirst()) return true;
             JSONObject existing = new JSONObject(cursor.getString(0));
-            return existing.similar(sale);
+            return jsonValuesEqual(existing, sale);
         } finally {
             if (cursor != null) cursor.close();
         }
+    }
+
+    /** Compare parsed JSON recursively; Android's org.json lacks JSONObject.similar(). */
+    private boolean jsonValuesEqual(Object left, Object right) {
+        if (left == right) return true;
+        if (left == null || right == null) return false;
+
+        if (left instanceof JSONObject && right instanceof JSONObject) {
+            JSONObject leftObject = (JSONObject) left;
+            JSONObject rightObject = (JSONObject) right;
+            if (leftObject.length() != rightObject.length()) return false;
+            java.util.Iterator<String> keys = leftObject.keys();
+            while (keys.hasNext()) {
+                String key = keys.next();
+                if (!rightObject.has(key) ||
+                    !jsonValuesEqual(leftObject.opt(key), rightObject.opt(key))) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        if (left instanceof JSONArray && right instanceof JSONArray) {
+            JSONArray leftArray = (JSONArray) left;
+            JSONArray rightArray = (JSONArray) right;
+            if (leftArray.length() != rightArray.length()) return false;
+            for (int i = 0; i < leftArray.length(); i++) {
+                if (!jsonValuesEqual(leftArray.opt(i), rightArray.opt(i))) return false;
+            }
+            return true;
+        }
+
+        if (left instanceof Number && right instanceof Number) {
+            double leftNumber = ((Number) left).doubleValue();
+            double rightNumber = ((Number) right).doubleValue();
+            return Double.isFinite(leftNumber) && Double.compare(leftNumber, rightNumber) == 0;
+        }
+        return left.equals(right);
     }
 
     private boolean upsertSale(SQLiteDatabase db, JSONObject sale) {

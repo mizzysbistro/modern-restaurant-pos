@@ -44,7 +44,7 @@ const checks = [
   ["Frontend blocks writes after native storage read failure", scriptMatch[1].includes("_posStorageError") && scriptMatch[1].includes("nativeStorageUnavailable") && scriptMatch[1].includes("Changes are disabled to protect saved sales")],
   ["JVM tests cover corrupt snapshots and orphaned sale history", unitTests.includes("loadStateReturnsExplicitErrorWhenStoredPayloadIsCorrupt") && unitTests.includes("missingSnapshotWithHistoricalSalesIsNotTreatedAsFirstLaunch")],
   ["Instrumentation tests cover orphaned sale history", instrumentation.includes("loadFailureIsExplicitAndDoesNotLookLikeFirstLaunch")],
-  ["Normal POS saves preserve immutable historical sale content", storage.includes("saleMatchesExisting") && storage.includes("existing.similar(sale)")],
+  ["Normal POS saves preserve immutable historical sale content", storage.includes("saleMatchesExisting") && storage.includes("jsonValuesEqual(existing, sale)")],
   ["Native state validation prevents sale ID reuse", storage.includes("id >= nextIdLong")],
   ["JVM and instrumentation tests cover duplicate order IDs", unitTests.includes("normalSaveCannotRewriteAnExistingSaleId") && unitTests.includes("rejectsNextIdThatWouldReuseAnExistingSaleId") && instrumentation.includes("normalSaveCannotRewriteAnExistingSaleId") && instrumentation.includes("rejectsNextIdThatWouldReuseAnExistingSaleId")],
   ["Frontend repairs stale next-order counters from saved sales", html.includes("maxSavedSaleId+1") && html.includes("nativeState&&nextId!==nativeState.nextId")],
