@@ -74,6 +74,8 @@ const nativeLoad=(()=>{try{if(window.PosStorage&&typeof window.PosStorage.loadSt
 const nativeState=nativeLoad.state,nativeStorageUnavailable=nativeLoad.failed;
 const load=(k,d)=>{try{const fromNative=nativeState&&nativeState[k];if(fromNative!==undefined&&fromNative!==null)return fromNative;const raw=localStorage.getItem(STORE+":"+k);return raw===null?d:JSON.parse(raw)}catch(e){return d}};
 let products=load("products",initial),sales=load("sales",[]),stock=load("stock",Object.fromEntries(initial.map(p=>[p.id,p.stock]))),tickets=load("tickets",[]),occupied=load("tables",{}),nextId=load("nextId",1001);
+const maxSavedSaleId=sales.reduce((max,s)=>{const id=Number(s&&s.id);return Number.isSafeInteger(id)&&id>=0?Math.max(max,id):max},1000);
+nextId=Math.max(1001,Number.isSafeInteger(Number(nextId))?Number(nextId):1001,maxSavedSaleId+1);
 let cart=new Map(),category="All",orderType="Dine in",tableNo=4,payment="Cash",customer="";
 const money=n=>"₱"+Number(n||0).toLocaleString("en-PH",{minimumFractionDigits:2,maximumFractionDigits:2});
 const esc=value=>String(value==null?"":value).replace(/[&<>"']/g,char=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char]));
@@ -145,6 +147,7 @@ if(nativeStorageUnavailable){const status=$("connectionStatus");if(status){statu
 // First run after the native database is introduced: migrate the existing
 // WebView localStorage snapshot into SQLite without replacing legacy records.
 else if(window.PosStorage&&!nativeState&&!save())notify("Local data migration could not be saved. Do not process real sales until storage is repaired.");
+else if(window.PosStorage&&nativeState&&nextId!==nativeState.nextId&&!save())notify("Order numbering could not be repaired. Do not process sales until storage is available.");
 </script>
 </body>
 </html>

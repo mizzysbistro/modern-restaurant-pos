@@ -228,7 +228,11 @@ public final class PosStorage extends SQLiteOpenHelper {
                 db.delete(TABLE_SALES, null, null);
             }
             for (int i = 0; i < sales.length(); i++) {
-                if (!upsertSale(db, sales.getJSONObject(i))) return false;
+                JSONObject sale = sales.getJSONObject(i);
+                // A routine save may replay an existing sale, but must never
+                // rewrite it when an order ID is accidentally reused.
+                if (!replaceSales && !saleMatchesExisting(db, sale)) return false;
+                if (!upsertSale(db, sale)) return false;
             }
 
             db.setTransactionSuccessful();
@@ -249,6 +253,25 @@ public final class PosStorage extends SQLiteOpenHelper {
             return -1L;
         }
         return (long) value;
+    }
+
+    /**
+     * Existing completed sale rows are immutable during normal state saves.
+     * Explicit restore is the only path that may replace historical records.
+     */
+    private boolean saleMatchesExisting(SQLiteDatabase db, JSONObject sale) throws JSONException {
+        Cursor cursor = null;
+        try {
+            cursor = db.query(
+                TABLE_SALES, new String[]{"payload"}, "sale_id = ?",
+                new String[]{String.valueOf(saleId(sale))}, null, null, null
+            );
+            if (!cursor.moveToFirst()) return true;
+            JSONObject existing = new JSONObject(cursor.getString(0));
+            return existing.similar(sale);
+        } finally {
+            if (cursor != null) cursor.close();
+        }
     }
 
     private boolean upsertSale(SQLiteDatabase db, JSONObject sale) {
@@ -297,12 +320,18 @@ public final class PosStorage extends SQLiteOpenHelper {
                 stock == null || tables == null || !(nextId instanceof Number)) {
                 return false;
             }
+            double nextIdValue = ((Number) nextId).doubleValue();
+            if (!Double.isFinite(nextIdValue) || nextIdValue < 1 ||
+                nextIdValue != Math.rint(nextIdValue) || nextIdValue > Long.MAX_VALUE) {
+                return false;
+            }
+            long nextIdLong = (long) nextIdValue;
             Set<Long> seenSaleIds = new HashSet<>();
             for (int i = 0; i < sales.length(); i++) {
                 JSONObject sale = sales.optJSONObject(i);
                 if (sale == null) return false;
                 long id = saleId(sale);
-                if (id < 1 || !seenSaleIds.add(id)) return false;
+                if (id < 1 || id >= nextIdLong || !seenSaleIds.add(id)) return false;
             }
             return true;
         } catch (JSONException error) {

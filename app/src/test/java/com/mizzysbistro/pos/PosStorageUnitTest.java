@@ -157,6 +157,22 @@ public final class PosStorageUnitTest {
     }
 
     @Test
+    public void normalSaveCannotRewriteAnExistingSaleId() throws JSONException {
+        assertTrue(storage.saveState(VALID_SNAPSHOT));
+        String changedSale = VALID_SNAPSHOT.replace("\\"total\\":100", "\\"total\\":1");
+        assertFalse(storage.saveState(changedSale));
+        JSONObject saved = new JSONObject(storage.loadState());
+        assertEquals(100.0, saved.getJSONArray("sales").getJSONObject(0).getDouble("total"), 0.0001);
+    }
+
+    @Test
+    public void rejectsNextIdThatWouldReuseAnExistingSaleId() throws JSONException {
+        assertTrue(storage.saveState(VALID_SNAPSHOT));
+        assertFalse(storage.saveState(snapshot("[" + FIRST_SALE + "]", 1001)));
+        assertSaleIds(storage.loadState(), 1001L);
+    }
+
+    @Test
     public void rejectsSnapshotsMissingRequiredCollections() {
         assertFalse(storage.saveState("{\"products\":[],\"sales\":[]}"));
         assertEquals("", storage.loadState());
