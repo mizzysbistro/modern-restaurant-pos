@@ -25,7 +25,13 @@ public final class PosStorage extends SQLiteOpenHelper {
     private static final int MAX_STATE_CHARS = 10 * 1024 * 1024;
 
     public PosStorage(Context context) {
-        super(context.getApplicationContext(), DATABASE_NAME, null, DATABASE_VERSION);
+        this(context, DATABASE_NAME);
+    }
+
+    // Package-private database-name override keeps instrumentation tests isolated
+    // from the real application's POS database.
+    PosStorage(Context context, String databaseName) {
+        super(context.getApplicationContext(), databaseName, null, DATABASE_VERSION);
     }
 
     @Override
