@@ -43,7 +43,12 @@ const checks = [
   ["Native backup export validates the document", activity.includes("isValidBackupDocument") && activity.includes("mizzy-bistro-pos-backup")],
   ["Native backup export uses Android document picker", activity.includes("Intent.ACTION_CREATE_DOCUMENT") && activity.includes("REQUEST_CREATE_BACKUP")],
   ["WebView supports picking restore file", activity.includes("onShowFileChooser") && activity.includes("REQUEST_FILE_CHOOSER")],
-  ["Backup import limits file size", scriptMatch[1].includes("const MAX_BACKUP_BYTES=10*1024*1024") && scriptMatch[1].includes("file.size>MAX_BACKUP_BYTES")]
+  ["Backup import limits file size", scriptMatch[1].includes("const MAX_BACKUP_BYTES=10*1024*1024") && scriptMatch[1].includes("file.size>MAX_BACKUP_BYTES")],
+  ["User-controlled menu content is HTML-escaped", scriptMatch[1].includes("const esc=value=>") && scriptMatch[1].includes("esc(p.name)") && scriptMatch[1].includes("esc(p.cat)")],
+  ["Kitchen ticket and receipt text is HTML-escaped", scriptMatch[1].includes("esc(x.name)") && scriptMatch[1].includes("esc(s.payment)")],
+  ["CSV export uses native Android file picker when available", scriptMatch[1].includes('exportTextFile("mizzy-bistro-sales.csv","text/csv",csv)')],
+  ["Backup schema validates table numbers", backupSchema.includes("sale.table > 12") && backupSchema.includes("ticket.table > 12")],
+  ["Backup schema validates explicit kitchen ticket status", backupSchema.includes('typeof ticket.done !== "boolean"')]
 ];
 
 const failed = checks.filter(([, passed]) => !passed);
