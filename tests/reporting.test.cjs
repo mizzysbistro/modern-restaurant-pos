@@ -167,3 +167,34 @@ test("refuses new adjustment events once the audit history reaches its limit", (
   assert.equal(result.ok, false);
   assert.match(result.error, /history is full/);
 });
+
+
+test("fails closed when a saved sale has an invalid timestamp", () => {
+  const result = summarizeSales([
+    sale(1, "2026-10-15T09:00:00.000Z", 10, "Cash"),
+    sale(2, "not-a-date", 40, "Cash")
+  ], "2026-10-15", "2026-10-15");
+  assert.equal(result.ok, false);
+  assert.match(result.error, /invalid timestamp/);
+  assert.deepEqual(result.sales, []);
+});
+
+test("fails closed instead of silently omitting invalid totals in the selected date range", () => {
+  for (const total of [-1, Infinity, NaN, Number.MAX_VALUE]) {
+    const result = summarizeSales([
+      sale(1, "2026-10-15T09:00:00.000Z", total, "Cash")
+    ], "2026-10-15", "2026-10-15");
+    assert.equal(result.ok, false, "invalid total " + String(total) + " must fail the report");
+    assert.match(result.error, /invalid sale record/);
+  }
+});
+
+test("ignores an invalid total on a correctly dated sale outside the selected range", () => {
+  const result = summarizeSales([
+    sale(1, "2026-10-14T09:00:00.000Z", -1, "Cash"),
+    sale(2, "2026-10-15T09:00:00.000Z", 20, "Cash")
+  ], "2026-10-15", "2026-10-15");
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.sales.map(item => item.id), [2]);
+  assert.equal(result.gross, 20);
+});
