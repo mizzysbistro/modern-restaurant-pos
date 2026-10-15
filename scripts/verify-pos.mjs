@@ -30,7 +30,8 @@ const checks = [
   ["APK uses an explicit stable signing keystore", gradle.includes('storeFile rootProject.file(".signing/debug.keystore")')],
   ["Signing workflow refuses to generate a replacement after key initialization", workflow.includes(".signing/KEY_INITIALIZED")],
   ["APK signature is verified against the keystore", workflow.includes("APK signer does not match the persistent signing key.")],
-  ["Workflow runs Android instrumentation tests", workflow.includes("connectedDebugAndroidTest")],
+  ["Workflow runs SQLite JVM tests", workflow.includes("testDebugUnitTest")],
+  ["Workflow compiles Android instrumentation tests", workflow.includes("assembleDebugAndroidTest")],
   ["SQLite instrumentation tests cover durable persistence", instrumentation.includes("savesAndReloadsSnapshotAfterDatabaseReopen")],
   ["SQLite instrumentation tests reject invalid writes", instrumentation.includes("invalidReplacementDoesNotOverwriteLastCommittedSnapshot")],
   ["APK workflow uses the persistent signing cache", workflow.includes("mizzy-pos-persistent-debug-signing-v1")]
