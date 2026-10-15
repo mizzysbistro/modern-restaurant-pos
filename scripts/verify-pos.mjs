@@ -9,6 +9,7 @@ const activity = read("app/src/main/java/com/mizzysbistro/pos/MainActivity.java"
 const storage = read("app/src/main/java/com/mizzysbistro/pos/PosStorage.java");
 const gradle = read("app/build.gradle");
 const workflow = read(".github/workflows/build-apk.yml");
+const instrumentation = read("app/src/androidTest/java/com/mizzysbistro/pos/PosStorageInstrumentedTest.java");
 
 const scriptMatch = html.match(/<script>([\s\S]*?)<\/script>/);
 if (!scriptMatch) throw new Error("POS HTML must include its main script block.");
@@ -26,7 +27,13 @@ const checks = [
   ["Checkout retains cart on persistence failure", scriptMatch[1].includes("if(!save()){sales=previous.sales")],
   ["Checkout rejects quantities beyond available stock", scriptMatch[1].includes("Insufficient stock for")],
   ["APK workflow increments versionCode", workflow.includes("versionCode $GITHUB_RUN_NUMBER")],
-  ["APK workflow reuses debug signing cache", workflow.includes("modern-restaurant-pos-debug-signing-v1")]
+  ["APK uses an explicit stable signing keystore", gradle.includes('storeFile rootProject.file(".signing/debug.keystore")')],
+  ["Signing workflow refuses to generate a replacement after key initialization", workflow.includes(".signing/KEY_INITIALIZED")],
+  ["APK signature is verified against the keystore", workflow.includes("APK signer does not match the persistent signing key.")],
+  ["Workflow runs Android instrumentation tests", workflow.includes("connectedDebugAndroidTest")],
+  ["SQLite instrumentation tests cover durable persistence", instrumentation.includes("savesAndReloadsSnapshotAfterDatabaseReopen")],
+  ["SQLite instrumentation tests reject invalid writes", instrumentation.includes("invalidReplacementDoesNotOverwriteLastCommittedSnapshot")],
+  ["APK workflow uses the persistent signing cache", workflow.includes("mizzy-pos-persistent-debug-signing-v1")]
 ];
 
 const failed = checks.filter(([, passed]) => !passed);
