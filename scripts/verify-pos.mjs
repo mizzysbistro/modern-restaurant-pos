@@ -91,6 +91,8 @@ const checks = [
   ["Native SQLite validates persisted open table orders and table ownership", storage.includes("openOrdersById") && storage.includes("mappedTableOrder") && storage.includes("activeOpenOrderId")],
   ["Backups validate open table orders, occupancy and active context", backupSchema.includes("invalid open table orders") && backupSchema.includes("An open table order must own its table occupancy") && backupTests.includes("accepts an open table order with matching occupancy and active context")],
   ["JVM and device tests cover open-table persistence and table ownership failures", unitTests.includes("openTableOrderPersistsAndOwnsTableOccupancy") && instrumentation.includes("openTableOrderPersistsAndOwnsTableOccupancy") && unitTests.includes("rejectsOpenTableOrderThatDoesNotOwnItsTable") && instrumentation.includes("rejectsOpenTableOrderThatDoesNotOwnItsTable")],
+  ["Table overview supports starting, continuing and cancelling persistent table orders", scriptMatch[1].includes("function saveTableOrder()") && scriptMatch[1].includes("data-cancel-open-order") && scriptMatch[1].includes("Continue order")],
+  ["Checkout finalizes the same open-table order ID without duplicating kitchen tickets", scriptMatch[1].includes("const saleId=currentOpenOrder?Number(currentOpenOrder.id):nextId") && scriptMatch[1].includes("openOrders=openOrders.filter(order=>Number(order.id)!==Number(currentOpenOrder.id))") && scriptMatch[1].includes("const finalTicket={...sale,done:wasDone}")],
 ];
 
 const failed = checks.filter(([, passed]) => !passed);

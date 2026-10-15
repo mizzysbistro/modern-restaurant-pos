@@ -43,7 +43,7 @@
 <div class="orderinfo" style="margin-top:-7px"><button class="selected" id="tablePick">Table 04 ▾</button><button id="customerBtn">＋ Customer</button></div>
 <div class="orderlines" id="orderLines"><div class="empty"><div><span>🥢</span><br>Your order starts here<br><small>Tap any menu item to add it.</small></div></div></div>
 <div class="totals"><div class="totalrow"><span>Subtotal</span><span id="subtotal">₱0.00</span></div><div class="totalrow"><span>VAT (12% included in prices)</span><span id="tax">₱0.00</span></div><div class="totalrow grand"><span>Total</span><span id="total">₱0.00</span></div></div>
-<button class="checkout" id="checkout" disabled><span>Charge customer</span><span id="chargeTotal">₱0.00 →</span></button>
+<button class="checkout" id="checkout" disabled><span>Charge customer</span><span id="chargeTotal">₱0.00 →</span></button>\n<button class="pill" id="saveTableOrder" style="width:100%;margin-top:8px">Save order to Table 04</button>
 <p class="footnote">Preview mode · No real payment will be processed</p>
 </aside>
 </div>
@@ -75,6 +75,10 @@ const nativeLoad=(()=>{try{if(window.PosStorage&&typeof window.PosStorage.loadSt
 const nativeState=nativeLoad.state,nativeStorageUnavailable=nativeLoad.failed;
 const load=(k,d)=>{try{const fromNative=nativeState&&nativeState[k];if(fromNative!==undefined&&fromNative!==null)return fromNative;const raw=localStorage.getItem(STORE+":"+k);return raw===null?d:JSON.parse(raw)}catch(e){return d}};
 let products=load("products",initial),sales=load("sales",[]),stock=load("stock",Object.fromEntries(initial.map(p=>[p.id,p.stock]))),tickets=load("tickets",[]),occupied=load("tables",{}),nextId=load("nextId",1001);
+let openOrders=load("openOrders",[]);
+if(!Array.isArray(openOrders))openOrders=[];
+const loadedActiveOpenOrderId=load("activeOpenOrderId",null);
+let activeOpenOrderId=loadedActiveOpenOrderId!==null&&loadedActiveOpenOrderId!==undefined&&Number.isSafeInteger(Number(loadedActiveOpenOrderId))&&Number(loadedActiveOpenOrderId)>0?Number(loadedActiveOpenOrderId):null;
 let stockAdjustments=nativeState
  ? (Array.isArray(nativeState.stockAdjustments)?nativeState.stockAdjustments:[])
  : load("stockAdjustments",[]);
@@ -83,6 +87,11 @@ const maxSavedSaleId=sales.reduce((max,s)=>{const id=Number(s&&s.id);return Numb
 nextId=Math.max(1001,Number.isSafeInteger(Number(nextId))?Number(nextId):1001,maxSavedSaleId+1);
 let reportRows=sales.slice();
 let cart=restoreCartEntries(load("openCart",[])),category="All",orderType=load("orderType","Dine in"),tableNo=Number(load("tableNo",4)),payment=load("payment","Cash"),customer=load("customer","");
+if(activeOpenOrderId!==null&&!openOrders.some(order=>Number(order.id)===activeOpenOrderId))activeOpenOrderId=null;
+if(activeOpenOrderId===null&&orderType==="Dine in"){
+ const mappedOrderId=Number(occupied[tableNo]||0);
+ if(openOrders.some(order=>Number(order.id)===mappedOrderId))activeOpenOrderId=mappedOrderId;
+}
 if(orderType!=="Dine in"&&orderType!=="Takeaway")orderType="Dine in";
 if(!Number.isSafeInteger(tableNo)||tableNo<1||tableNo>12)tableNo=4;
 if(typeof payment!=="string"||!payment.trim()||payment.length>80)payment="Cash";
@@ -90,11 +99,19 @@ if(typeof customer!=="string"||customer.length>200)customer="";
 const money=n=>"₱"+Number(n||0).toLocaleString("en-PH",{minimumFractionDigits:2,maximumFractionDigits:2});
 const esc=value=>String(value==null?"":value).replace(/[&<>"']/g,char=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char]));
 const $=id=>document.getElementById(id);
-function cloneCart(){return new Map([...cart.entries()].map(([id,item])=>[id,{qty:item.qty}]));}
-function serializeOpenCart(){return [...cart.entries()].map(([id,item])=>({id:Number(id),qty:Number(item.qty)}));}
+function cartLineName(id,item){const product=products.find(p=>Number(p.id)===Number(id));return item&&typeof item.name==="string"&&item.name.trim()?item.name:(product?product.name:"Item #"+id)}
+function cartLinePrice(id,item){const product=products.find(p=>Number(p.id)===Number(id));return item&&Number.isFinite(Number(item.price))&&Number(item.price)>=0?Number(item.price):(product?Number(product.price):0)}
+function cloneCart(){return new Map([...cart.entries()].map(([id,item])=>[id,{qty:item.qty,name:cartLineName(id,item),price:cartLinePrice(id,item)}]));}
+function cloneOpenOrders(){return openOrders.map(order=>({...order,items:Array.isArray(order.items)?order.items.map(item=>({...item})):[]}));}
+function serializeOpenCart(){return [...cart.entries()].map(([id,item])=>({id:Number(id),qty:Number(item.qty),name:cartLineName(id,item),price:cartLinePrice(id,item)}));}
 function restoreCartEntries(entries){
 const restored=new Map();if(!Array.isArray(entries))return restored;
-for(const line of entries){const id=Number(line&&line.id),qty=Number(line&&line.qty);if(Number.isSafeInteger(id)&&id>0&&products.some(p=>Number(p.id)===id)&&Number.isSafeInteger(qty)&&qty>0&&qty<=100000)restored.set(id,{qty})}
+for(const line of entries){
+ const id=Number(line&&line.id),qty=Number(line&&line.qty),product=products.find(p=>Number(p.id)===id);
+ const itemName=line&&typeof line.name==="string"&&line.name.trim()?line.name:(product?product.name:"");
+ const itemPrice=line&&Number.isFinite(Number(line.price))&&Number(line.price)>=0?Number(line.price):(product?Number(product.price):NaN);
+ if(Number.isSafeInteger(id)&&id>0&&product&&Number.isSafeInteger(qty)&&qty>0&&qty<=100000&&itemName&&itemName.length<=200&&Number.isFinite(itemPrice)&&itemPrice>=0)restored.set(id,{qty,name:itemName,price:itemPrice});
+}
 return restored
 }
 function syncDraftControls(){
@@ -102,10 +119,11 @@ document.querySelectorAll("[data-type]").forEach(button=>button.classList.toggle
 document.querySelectorAll("[data-pay]").forEach(button=>button.classList.toggle("chosen",button.dataset.pay===payment));
 const tablePick=$("tablePick");if(tablePick){tablePick.textContent="Table "+String(tableNo).padStart(2,"0")+" ▾";tablePick.style.display=orderType==="Dine in"?"block":"none"}
 const customerButton=$("customerBtn");if(customerButton)customerButton.textContent=customer?"♙ "+customer:"＋ Customer";
+const saveTableButton=$("saveTableOrder");if(saveTableButton){saveTableButton.style.display=orderType==="Dine in"?"block":"none";saveTableButton.disabled=orderType!=="Dine in"||cart.size===0;saveTableButton.textContent=(activeOpenOrderId===null?"Save":"Update")+" order to Table "+String(tableNo).padStart(2,"0")}
 }
 function save(options={}){
 if(nativeStorageUnavailable){notify("Local database could not be read. Changes are disabled to protect saved sales.");return false}
-const snapshot={products,sales,stock,tickets,tables:occupied,nextId,stockAdjustments,openCart:serializeOpenCart(),orderType,tableNo,payment,customer};
+const snapshot={products,sales,stock,tickets,tables:occupied,nextId,stockAdjustments,openCart:serializeOpenCart(),openOrders,activeOpenOrderId,orderType,tableNo,payment,customer};
 if(window.PosStorage){let ok=false;try{const payload=JSON.stringify(snapshot);ok=options.replaceSales===true&&typeof window.PosStorage.restoreState==="function"?window.PosStorage.restoreState(payload)===true:window.PosStorage.saveState(payload)===true}catch(e){ok=false}if(!ok){notify("Local database save failed. The change was not committed.");return false}}
 try{for(const [k,v] of Object.entries(snapshot))localStorage.setItem(STORE+":"+k,JSON.stringify(v))}catch(e){if(!window.PosStorage){notify("Could not save local data. Check device storage.");return false}}
 return true
@@ -120,11 +138,79 @@ function updateConnectionStatus(){const el=$("connectionStatus");if(!el)return;c
 window.addEventListener("online",updateConnectionStatus);window.addEventListener("offline",updateConnectionStatus);
 function notify(msg){$("notice").textContent=msg;$("notice").classList.add("show");clearTimeout(notify.t);notify.t=setTimeout(()=>$("notice").classList.remove("show"),2300)}
 function renderMenu(){const cats=["All",...new Set(products.map(p=>p.cat))];$("categories").innerHTML=cats.map(c=>'<button class="cat '+(category===c?"active":"")+'" data-cat="'+esc(c)+'">'+(c==="All"?"All items":esc(c))+'</button>').join("");const q=$("search").value.toLowerCase().trim();const list=products.filter(p=>(category==="All"||p.cat===category)&&p.name.toLowerCase().includes(q));$("menuGrid").innerHTML=list.map(p=>'<button class="item" data-add="'+p.id+'"><div class="foodart '+(/^art[1-9]$/.test(p.art||"")?p.art:"art1")+'"><span>'+esc(p.emoji||"🍽️")+'</span></div><div class="itemname">'+esc(p.name)+'</div><div class="itemmeta"><span class="price">'+money(p.price)+'</span><span class="tag">'+esc(p.tag||p.cat||"Menu item")+'</span></div><div class="addhint">＋ Tap to add · Stock '+(stock[p.id]??0)+'</div></button>').join("")||'<div class="placeholderpanel">No dishes found.</div>'}
-function renderCart(){const rows=[...cart.entries()],qty=rows.reduce((s,x)=>s+x[1].qty,0),sub=rows.reduce((s,[id,v])=>s+products.find(p=>p.id===id).price*v.qty,0);$("orderCount").textContent=qty+" items";$("subtotal").textContent=money(sub);$("tax").textContent=money(sub*12/112);$("total").textContent=money(sub);$("chargeTotal").textContent=money(sub)+" →";$("checkout").disabled=!qty;$("orderLines").innerHTML=rows.length?rows.map(([id,v])=>{const p=products.find(p=>p.id===id);return '<div class="lineitem"><div><strong>'+esc(p.name)+'</strong><small>'+money(p.price)+' each</small><div class="qty"><button data-qty="'+id+'" data-delta="-1">−</button><b>'+v.qty+'</b><button data-qty="'+id+'" data-delta="1">＋</button></div></div><div class="linetotal">'+money(p.price*v.qty)+'</div></div>'}).join(""):'<div class="empty"><div><span>🥢</span><br>Your order starts here</div></div>'}
+function renderCart(){
+const rows=[...cart.entries()],qty=rows.reduce((sum,row)=>sum+row[1].qty,0),sub=rows.reduce((sum,[id,item])=>sum+cartLinePrice(id,item)*item.qty,0);
+$("orderCount").textContent=qty+" items";$("subtotal").textContent=money(sub);$("tax").textContent=money(sub*12/112);$("total").textContent=money(sub);$("chargeTotal").textContent=money(sub)+" →";$("checkout").disabled=!qty;
+$("orderLines").innerHTML=rows.length?rows.map(([id,item])=>'<div class="lineitem"><div><strong>'+esc(cartLineName(id,item))+'</strong><small>'+money(cartLinePrice(id,item))+' each</small><div class="qty"><button data-qty="'+id+'" data-delta="-1">−</button><b>'+item.qty+'</b><button data-qty="'+id+'" data-delta="1">＋</button></div></div><div class="linetotal">'+money(cartLinePrice(id,item)*item.qty)+'</div></div>').join(""):'<div class="empty"><div><span>🥢</span><br>Your order starts here</div></div>';
+syncDraftControls()
+}
+function saveTableOrder(){
+ if(orderType!=="Dine in")return notify("Choose Dine in before saving a table order");
+ if(!cart.size)return notify("Add items before saving the table order");
+ const table=tableNo,occupiedId=Number(occupied[table]||0);
+ let existing=activeOpenOrderId===null?null:openOrders.find(order=>Number(order.id)===activeOpenOrderId);
+ if(activeOpenOrderId!==null&&(!existing||Number(existing.table)!==table))return notify("The active table order could not be found. Please reopen it from Tables.");
+ const mapped=openOrders.find(order=>Number(order.id)===occupiedId);
+ if(!existing&&mapped)existing=mapped;
+ if(occupiedId&&!existing)return notify("This table has a completed order. Release it before starting another order.");
+ const previous={openOrders:cloneOpenOrders(),occupied:{...occupied},nextId,activeOpenOrderId,cart:cloneCart(),tickets:tickets.map(ticket=>({...ticket,items:Array.isArray(ticket.items)?ticket.items.map(item=>({...item})):[]})),customer};
+ const now=new Date().toISOString(),items=[...cart.entries()].map(([id,item])=>({id:Number(id),name:cartLineName(id,item),price:cartLinePrice(id,item),qty:Number(item.qty)}));
+ let order;
+ if(existing){order={...existing,table,customer,items,updatedAt:now};openOrders=openOrders.map(candidate=>Number(candidate.id)===Number(existing.id)?order:candidate)}
+ else{order={id:nextId++,table,createdAt:now,updatedAt:now,customer,items};openOrders=openOrders.concat(order)}
+ activeOpenOrderId=Number(order.id);occupied[table]=Number(order.id);
+ const ticketItems=items.map(({id,...item})=>item),ticketIndex=tickets.findIndex(ticket=>Number(ticket.id)===Number(order.id));
+ if(ticketIndex>=0){const unchanged=JSON.stringify(tickets[ticketIndex].items)===JSON.stringify(ticketItems);tickets[ticketIndex]={...tickets[ticketIndex],time:now,type:"Dine in",table,customer,items:ticketItems,done:unchanged?!!tickets[ticketIndex].done:false}}
+ else tickets.unshift({id:Number(order.id),time:now,type:"Dine in",table,customer,done:false,items:ticketItems});
+ if(!save()){openOrders=previous.openOrders;occupied=previous.occupied;nextId=previous.nextId;activeOpenOrderId=previous.activeOpenOrderId;cart=previous.cart;tickets=previous.tickets;customer=previous.customer;syncDraftControls();renderCart();renderTables();renderKitchen();return false}
+ cart=restoreCartEntries(order.items);syncDraftControls();renderCart();renderTables();renderKitchen();notify("Saved table order #"+order.id+" · Table "+String(table).padStart(2,"0"));return true
+}
 function renderTables(){
  const total=12,occupiedCount=Array.from({length:total},(_,i)=>i+1).filter(n=>!!occupied[n]).length,stats=$("tablesPage").querySelector(".stats");
  stats.innerHTML='<div class="stat"><span>Total tables</span><strong>'+total+'</strong></div><div class="stat"><span>Occupied</span><strong>'+occupiedCount+'</strong></div><div class="stat"><span>Available</span><strong>'+(total-occupiedCount)+'</strong></div>';
- $("tableGrid").innerHTML=Array.from({length:total},(_,i)=>{const n=i+1,busy=!!occupied[n];return '<div class="tablecard"><span class="status '+(busy?"busy":"")+'">'+(busy?"● Occupied":"● Available")+'</span><strong>Table '+String(n).padStart(2,"0")+'</strong><span style="color:#777;font-size:12px">'+(busy?"Latest order #"+Number(occupied[n]):"Seats 4 guests")+'</span><button class="pill" data-table="'+n+'">Select table</button>'+(busy?'<button class="pill" data-release-table="'+n+'">Release table</button>':"")+'</div>'}).join("")
+ $("tableGrid").innerHTML=Array.from({length:total},(_,i)=>{
+  const n=i+1,occupiedId=Number(occupied[n]||0),busy=occupiedId>0,openOrder=openOrders.find(order=>Number(order.id)===occupiedId);
+  const openItems=openOrder?openOrder.items.reduce((sum,item)=>sum+Number(item.qty||0),0):0;
+  const openTotal=openOrder?openOrder.items.reduce((sum,item)=>sum+Number(item.price||0)*Number(item.qty||0),0):0;
+  const detail=openOrder?("Open order #"+openOrder.id+" · "+openItems+" items · "+money(openTotal)):(busy?"Completed order #"+occupiedId+" · release before reuse":"Seats 4 guests");
+  const actions=!busy?'<button class="pill" data-table="'+n+'">Start order</button>':openOrder?'<button class="pill" data-table="'+n+'">Continue order</button><button class="pill" data-cancel-open-order="'+n+'">Cancel order</button>':'<button class="pill" data-release-table="'+n+'">Release table</button>';
+  return '<div class="tablecard"><span class="status '+(busy?"busy":"")+'">'+(openOrder?"● Open order":busy?"● Occupied":"● Available")+'</span><strong>Table '+String(n).padStart(2,"0")+'</strong><span style="color:#777;font-size:12px">'+detail+'</span>'+actions+'</div>'
+ }).join("")
+}
+function saveTableOrder(){
+ if(orderType!=="Dine in")return notify("Choose Dine in before saving a table order");
+ if(!cart.size)return notify("Add items before saving the table order");
+ const table=tableNo,occupiedId=Number(occupied[table]||0);
+ let existing=activeOpenOrderId===null?null:openOrders.find(order=>Number(order.id)===activeOpenOrderId);
+ if(activeOpenOrderId!==null&&(!existing||Number(existing.table)!==table))return notify("The active table order could not be found. Please reopen it from Tables.");
+ const mapped=openOrders.find(order=>Number(order.id)===occupiedId);
+ if(!existing&&mapped)existing=mapped;
+ if(occupiedId&&!existing)return notify("This table still has a completed order. Release it before starting another order.");
+ const previous={openOrders:cloneOpenOrders(),occupied:{...occupied},nextId,activeOpenOrderId,cart:cloneCart(),tickets:tickets.map(ticket=>({...ticket,items:Array.isArray(ticket.items)?ticket.items.map(item=>({...item})):[]})),customer};
+ const now=new Date().toISOString();
+ const items=[...cart.entries()].map(([id,item])=>({id:Number(id),name:cartLineName(id,item),price:cartLinePrice(id,item),qty:Number(item.qty)}));
+ let order;
+ if(existing){
+  order={...existing,table,customer,items,updatedAt:now};
+  openOrders=openOrders.map(candidate=>Number(candidate.id)===Number(existing.id)?order:candidate);
+ }else{
+  order={id:nextId++,table,createdAt:now,updatedAt:now,customer,items};
+  openOrders=openOrders.concat(order);
+ }
+ activeOpenOrderId=Number(order.id);occupied[table]=Number(order.id);
+ const ticketItems=items.map(({id,...item})=>item);
+ const ticketIndex=tickets.findIndex(ticket=>Number(ticket.id)===Number(order.id));
+ if(ticketIndex>=0){
+  const unchanged=JSON.stringify(tickets[ticketIndex].items)===JSON.stringify(ticketItems);
+  tickets[ticketIndex]={...tickets[ticketIndex],time:now,type:"Dine in",table,customer,items:ticketItems,done:unchanged?!!tickets[ticketIndex].done:false};
+ }else{
+  tickets.unshift({id:Number(order.id),time:now,type:"Dine in",table,customer,done:false,items:ticketItems});
+ }
+ if(!save()){
+  openOrders=previous.openOrders;occupied=previous.occupied;nextId=previous.nextId;activeOpenOrderId=previous.activeOpenOrderId;cart=previous.cart;tickets=previous.tickets;customer=previous.customer;
+  syncDraftControls();renderCart();renderTables();renderKitchen();return false
+ }
+ cart=restoreCartEntries(order.items);syncDraftControls();renderCart();renderTables();renderKitchen();notify("Saved table order #"+order.id+" · Table "+String(table).padStart(2,"0"));return true
 }
 function renderKitchen(){$("kitchenTickets").innerHTML=tickets.length?tickets.map((t,i)=>'<div class="tablecard"><span class="status '+(t.done?"":"busy")+'">'+(t.done?"✓ Ready":"● In preparation")+'</span><strong>Order #'+t.id+' · '+(t.type==="Dine in"?"Table "+t.table:"Takeaway")+'</strong><p>'+t.items.map(x=>x.qty+"× "+esc(x.name)).join("<br>")+'</p><button class="pill" data-done="'+i+'">'+(t.done?"Completed":"Mark ready ✓")+'</button></div>').join(""):'<div class="placeholderpanel"><h3>All caught up</h3><p>Orders appear here after checkout.</p></div>'}
 function renderInventory(){const stats=$("inventoryPage").querySelector(".stats");stats.innerHTML='<div class="stat"><span>Menu items</span><strong>'+products.length+'</strong></div><div class="stat"><span>Low stock</span><strong>'+products.filter(p=>(stock[p.id]||0)<=5).length+'</strong></div><div class="stat"><span>Estimated stock value</span><strong>'+money(products.reduce((s,p)=>s+(stock[p.id]||0)*p.price*.25,0))+'</strong></div>';let panel=$("inventoryList");if(!panel){panel=document.createElement("div");panel.id="inventoryList";panel.className="placeholderpanel";$("inventoryPage").appendChild(panel)}panel.innerHTML='<h3>Menu & stock</h3>'+products.map(p=>'<div class="lineitem"><div><strong>'+esc(p.emoji||"🍽️") +' '+esc(p.name)+'</strong><small>'+esc(p.cat)+' · '+money(p.price)+' · Stock '+(stock[p.id]||0)+'</small></div><div><button class="pill" data-stock="'+p.id+'">Edit stock</button> <button class="pill" data-edit="'+p.id+'">Edit item</button></div></div>').join("")+'<p><button class="checkout" id="addProduct">＋ Add menu item</button></p><h3 style="margin-top:18px">Recent stock adjustments</h3>'+(stockAdjustments.length?stockAdjustments.slice(-10).reverse().map(a=>'<div class="lineitem"><div><strong>'+esc(a.productName)+'</strong><small>'+esc(new Date(a.time).toLocaleString())+' · '+esc(a.reason)+' · '+esc(a.source)+'</small></div><span>'+Number(a.from)+' → '+Number(a.to)+' ('+(Number(a.delta)>0?'+':'')+Number(a.delta)+')</span></div>').join(""):'<p>No stock adjustments recorded yet.</p>')}
@@ -148,7 +234,7 @@ if(window.PosFiles&&typeof window.PosFiles.exportTextFile==="function"){window.P
 downloadJson(csv,filename,"text/csv");
 }
 
-function backupDocument(){return {format:"mizzy-bistro-pos-backup",schemaVersion:1,exportedAt:new Date().toISOString(),appId:"com.mizzysbistro.pos",state:{products,sales,stock,tickets,tables:occupied,nextId,stockAdjustments,openCart:serializeOpenCart(),orderType,tableNo,payment,customer}}}
+function backupDocument(){return {format:"mizzy-bistro-pos-backup",schemaVersion:1,exportedAt:new Date().toISOString(),appId:"com.mizzysbistro.pos",state:{products,sales,stock,tickets,tables:occupied,nextId,stockAdjustments,openCart:serializeOpenCart(),openOrders,activeOpenOrderId,orderType,tableNo,payment,customer}}}
 function validateBackupDocument(doc){return window.MizzyBackup.validateBackupDocument(doc)}
 function downloadJson(text,filename,mime){const url=URL.createObjectURL(new Blob([text],{type:mime})),a=document.createElement("a");a.href=url;a.download=filename;a.click();setTimeout(()=>URL.revokeObjectURL(url),1500)}
 function exportFullBackup(){
@@ -161,19 +247,20 @@ function exportFullBackup(){
 function restoreBackupDocument(doc){
  const checked=validateBackupDocument(doc);if(!checked.ok){notify(checked.error);return false}
  const st=checked.state;
- if(!confirm("Restore this backup? It will replace the menu, sales, stock, kitchen tickets, table status and open cart currently on this tablet. Export a backup of current data first."))return false;
- const previous={products,sales,stock,tickets,occupied,nextId,cart:cloneCart(),orderType,tableNo,payment,customer,stockAdjustments};
+ if(!confirm("Restore this backup? It will replace the menu, sales, stock, kitchen tickets, table status, open orders and current cart on this tablet. Export a backup of current data first."))return false;
+ const previous={products,sales,stock,tickets,occupied,nextId,cart:cloneCart(),orderType,tableNo,payment,customer,openOrders:cloneOpenOrders(),activeOpenOrderId,stockAdjustments};
  products=st.products;sales=st.sales;stock=st.stock;tickets=st.tickets;occupied=st.tables;nextId=st.nextId;stockAdjustments=Array.isArray(st.stockAdjustments)?st.stockAdjustments:[];
+ openOrders=Array.isArray(st.openOrders)?st.openOrders:[];activeOpenOrderId=Number.isSafeInteger(st.activeOpenOrderId)&&st.activeOpenOrderId>0?st.activeOpenOrderId:null;
  cart=restoreCartEntries(st.openCart||[]);
  orderType=st.orderType==="Takeaway"?"Takeaway":"Dine in";
  tableNo=Number.isSafeInteger(st.tableNo)&&st.tableNo>=1&&st.tableNo<=12?st.tableNo:4;
  payment=typeof st.payment==="string"&&st.payment.trim()?st.payment:"Cash";
  customer=typeof st.customer==="string"?st.customer:"";
  if(!save({replaceSales:true})){
- products=previous.products;sales=previous.sales;stock=previous.stock;tickets=previous.tickets;occupied=previous.occupied;nextId=previous.nextId;cart=previous.cart;orderType=previous.orderType;tableNo=previous.tableNo;payment=previous.payment;customer=previous.customer;stockAdjustments=previous.stockAdjustments;
- syncDraftControls();updateConnectionStatus();renderMenu();renderCart();renderTables();renderInventory();renderReports();syncDraftControls();notify("Restore failed. Existing data was kept.");return false
+ products=previous.products;sales=previous.sales;stock=previous.stock;tickets=previous.tickets;occupied=previous.occupied;nextId=previous.nextId;cart=previous.cart;orderType=previous.orderType;tableNo=previous.tableNo;payment=previous.payment;customer=previous.customer;openOrders=previous.openOrders;activeOpenOrderId=previous.activeOpenOrderId;stockAdjustments=previous.stockAdjustments;
+ syncDraftControls();updateConnectionStatus();renderMenu();renderCart();renderTables();renderInventory();renderReports();syncDraftControls();renderKitchen();notify("Restore failed. Existing data was kept.");return false
  }
- syncDraftControls();renderMenu();renderCart();renderTables();renderInventory();renderReports();showPage("pos");notify("POS backup restored successfully.");return true
+ syncDraftControls();renderMenu();renderCart();renderTables();renderInventory();renderReports();renderKitchen();showPage("pos");notify("POS backup restored successfully.");return true
 }
 const MAX_BACKUP_BYTES=10*1024*1024;
 function readBackupFile(file){
@@ -192,11 +279,36 @@ function printReceipt(s){
  const w=window.open("","_blank","width=400,height=650");if(!w)return notify("Sale saved. Allow pop-ups to print receipt.");
  w.document.write('<title>Receipt #'+Number(s.id)+'</title><style>body{font:14px monospace;padding:18px}table{width:100%}td{padding:5px 0}h2,p{text-align:center}</style><h2>MIZZY’S BISTRO</h2><p>POS receipt · locally recorded<br>Order #'+Number(s.id)+'<br>'+esc(new Date(s.time).toLocaleString())+'</p><hr><table>'+s.items.map(x=>'<tr><td>'+Number(x.qty)+' × '+esc(x.name)+'</td><td>'+money(x.price*x.qty)+'</td></tr>').join("")+'</table><hr><p>Payment method: '+esc(s.payment)+'</p><h3>TOTAL '+money(s.total)+'</h3><p>Thank you!</p><script>window.onload=()=>window.print()<\\/script>');w.document.close()
 }
-document.addEventListener("click",e=>{let x=e.target.closest("[data-add]");if(x){const id=Number(x.dataset.add);if((stock[id]||0)<=0)return notify("No stock available; update Stock first");const previous=cloneCart(),v=cart.get(id)||{qty:0};v.qty++;cart.set(id,v);if(!save()){cart=previous;renderCart();return}renderCart();return}x=e.target.closest("[data-qty]");if(x){const id=Number(x.dataset.qty),v=cart.get(id),previous=cloneCart();v.qty+=Number(x.dataset.delta);if(v.qty<=0)cart.delete(id);if(!save()){cart=previous;renderCart();return}renderCart();return}x=e.target.closest("[data-cat]");if(x){category=x.dataset.cat;renderMenu();return}x=e.target.closest("[data-page]");if(x){showPage(x.dataset.page);return}x=e.target.closest("[data-type]");if(x){const previous=orderType;orderType=x.dataset.type;syncDraftControls();if(!save()){orderType=previous;syncDraftControls();return}return}x=e.target.closest("[data-release-table]");if(x){const n=Number(x.dataset.releaseTable),current=occupied[n];if(!current)return;if(!confirm("Release Table "+String(n).padStart(2,"0")+"? Only do this after the guests have left."))return;delete occupied[n];if(!save()){occupied[n]=current;return}renderTables();notify("Table "+String(n).padStart(2,"0")+" is now available");return}x=e.target.closest("[data-table]");if(x){const previous=tableNo;tableNo=Number(x.dataset.table);syncDraftControls();if(!save()){tableNo=previous;syncDraftControls();return}showPage("pos");return}x=e.target.closest("[data-pay]");if(x){const previous=payment;payment=x.dataset.pay;syncDraftControls();if(!save()){payment=previous;syncDraftControls();return}return}x=e.target.closest("[data-done]");if(x){const index=Number(x.dataset.done),ticket=tickets[index];if(!ticket)return;const wasDone=ticket.done;ticket.done=true;if(!save()){ticket.done=wasDone;renderKitchen();return}renderKitchen();return}x=e.target.closest("[data-stock]");if(x){const id=Number(x.dataset.stock),previous=stock[id]||0,n=Number(prompt("Stock quantity:",previous));if(!Number.isInteger(n)||n<0)return notify("Enter a whole number");if(n===previous)return notify("No stock change recorded");const reason=prompt("Reason for stock adjustment:","Count correction");if(reason===null)return;if(!reason.trim())return notify("Enter a reason to record this adjustment");const previousAdjustments=stockAdjustments;stock[id]=n;recordStockAdjustment(id,previous,n,reason,"Manual");if(!save()){stock[id]=previous;stockAdjustments=previousAdjustments;renderMenu();renderInventory();return}renderMenu();renderInventory();return}x=e.target.closest("[data-edit]");if(x){editItem(Number(x.dataset.edit));return}if(e.target.closest("#addProduct")){addItem();return}if(e.target.closest("#applyReport")){const start=$("reportStart").value,end=$("reportEnd").value;if(!start||!end)return notify("Choose both report dates");if(start>end)return notify("Start date must be on or before the end date");renderReports(start,end);return}if(e.target.closest("#exportSales")){exportSalesCsv(reportRows,"mizzy-bistro-sales-filtered.csv");return}if(e.target.closest("#exportAllSales")){exportSalesCsv(sales,"mizzy-bistro-sales-all.csv");return}if(e.target.closest("#exportBackup")){exportFullBackup();return}if(e.target.closest("#importBackup")){$("backupFile").click();return}}); 
+document.addEventListener("click",e=>{let x=e.target.closest("[data-add]");if(x){const id=Number(x.dataset.add);if((stock[id]||0)<=0)return notify("No stock available; update Stock first");const previous=cloneCart(),product=products.find(item=>Number(item.id)===id),v=cart.get(id)||{qty:0,name:product.name,price:product.price};v.qty++;cart.set(id,v);if(!save()){cart=previous;renderCart();return}renderCart();return}x=e.target.closest("[data-qty]");if(x){const id=Number(x.dataset.qty),v=cart.get(id),previous=cloneCart();v.qty+=Number(x.dataset.delta);if(v.qty<=0)cart.delete(id);if(!save()){cart=previous;renderCart();return}renderCart();return}x=e.target.closest("[data-cat]");if(x){category=x.dataset.cat;renderMenu();return}x=e.target.closest("[data-page]");if(x){showPage(x.dataset.page);return}x=e.target.closest("[data-type]");if(x){if(activeOpenOrderId!==null&&x.dataset.type!=="Dine in")return notify("Save or cancel the open table order before switching to takeaway");const previous=orderType;orderType=x.dataset.type;syncDraftControls();if(!save()){orderType=previous;syncDraftControls();return}return}x=e.target.closest("[data-cancel-open-order]");if(x){const n=Number(x.dataset.cancelOpenOrder),orderId=Number(occupied[n]||0),order=openOrders.find(candidate=>Number(candidate.id)===orderId);if(!order)return notify("The open table order could not be found");if(!confirm("Cancel open order #"+order.id+" for Table "+String(n).padStart(2,"0")+"? This removes the saved order and its kitchen ticket."))return;const previous={openOrders:cloneOpenOrders(),occupied:{...occupied},tickets:tickets.map(ticket=>({...ticket,items:Array.isArray(ticket.items)?ticket.items.map(item=>({...item})):[]})),cart:cloneCart(),activeOpenOrderId,customer};openOrders=openOrders.filter(candidate=>Number(candidate.id)!==orderId);delete occupied[n];tickets=tickets.filter(ticket=>Number(ticket.id)!==orderId);if(activeOpenOrderId===orderId){activeOpenOrderId=null;cart=new Map();customer=""}if(!save()){openOrders=previous.openOrders;occupied=previous.occupied;tickets=previous.tickets;cart=previous.cart;activeOpenOrderId=previous.activeOpenOrderId;customer=previous.customer;syncDraftControls();renderTables();renderCart();renderKitchen();return}syncDraftControls();renderTables();renderCart();renderKitchen();notify("Open order #"+orderId+" cancelled");return}x=e.target.closest("[data-release-table]");if(x){const n=Number(x.dataset.releaseTable),current=occupied[n];if(!current)return;if(openOrders.some(order=>Number(order.id)===Number(current)))return notify("Cancel or complete the open order before releasing this table");if(!confirm("Release Table "+String(n).padStart(2,"0")+"? Only do this after the guests have left."))return;delete occupied[n];if(!save()){occupied[n]=current;return}renderTables();notify("Table "+String(n).padStart(2,"0")+" is now available");return}x=e.target.closest("[data-table]");if(x){const n=Number(x.dataset.table),mappedId=Number(occupied[n]||0),openOrder=openOrders.find(order=>Number(order.id)===mappedId);if(mappedId&&!openOrder)return notify("Table "+String(n).padStart(2,"0")+" has a completed order. Release it before starting a new table order.");if(cart.size&&(activeOpenOrderId!==null&&activeOpenOrderId!==mappedId||activeOpenOrderId===null&&tableNo!==n))return notify("Save the current table order or clear the current cart before switching tables.");const previous={tableNo,orderType,activeOpenOrderId,cart:cloneCart(),customer};tableNo=n;orderType="Dine in";activeOpenOrderId=openOrder?Number(openOrder.id):null;if(openOrder&&activeOpenOrderId!==previous.activeOpenOrderId){cart=restoreCartEntries(openOrder.items);customer=typeof openOrder.customer==="string"?openOrder.customer:""}else if(!openOrder&&activeOpenOrderId!==previous.activeOpenOrderId){cart=new Map();customer=""}syncDraftControls();if(!save()){tableNo=previous.tableNo;orderType=previous.orderType;activeOpenOrderId=previous.activeOpenOrderId;cart=previous.cart;customer=previous.customer;syncDraftControls();renderCart();return}renderCart();renderTables();showPage("pos");return}x=e.target.closest("[data-pay]");if(x){const previous=payment;payment=x.dataset.pay;syncDraftControls();if(!save()){payment=previous;syncDraftControls();return}return}x=e.target.closest("[data-done]");if(x){const index=Number(x.dataset.done),ticket=tickets[index];if(!ticket)return;const wasDone=ticket.done;ticket.done=true;if(!save()){ticket.done=wasDone;renderKitchen();return}renderKitchen();return}x=e.target.closest("[data-stock]");if(x){const id=Number(x.dataset.stock),previous=stock[id]||0,n=Number(prompt("Stock quantity:",previous));if(!Number.isInteger(n)||n<0)return notify("Enter a whole number");if(n===previous)return notify("No stock change recorded");const reason=prompt("Reason for stock adjustment:","Count correction");if(reason===null)return;if(!reason.trim())return notify("Enter a reason to record this adjustment");const previousAdjustments=stockAdjustments;stock[id]=n;recordStockAdjustment(id,previous,n,reason,"Manual");if(!save()){stock[id]=previous;stockAdjustments=previousAdjustments;renderMenu();renderInventory();return}renderMenu();renderInventory();return}x=e.target.closest("[data-edit]");if(x){editItem(Number(x.dataset.edit));return}if(e.target.closest("#saveTableOrder")){saveTableOrder();return}if(e.target.closest("#addProduct")){addItem();return}if(e.target.closest("#applyReport")){const start=$("reportStart").value,end=$("reportEnd").value;if(!start||!end)return notify("Choose both report dates");if(start>end)return notify("Start date must be on or before the end date");renderReports(start,end);return}if(e.target.closest("#exportSales")){exportSalesCsv(reportRows,"mizzy-bistro-sales-filtered.csv");return}if(e.target.closest("#exportAllSales")){exportSalesCsv(sales,"mizzy-bistro-sales-all.csv");return}if(e.target.closest("#exportBackup")){exportFullBackup();return}if(e.target.closest("#importBackup")){$("backupFile").click();return}}); 
 document.addEventListener("change",e=>{if(e.target&&e.target.id==="backupFile"){const file=e.target.files&&e.target.files[0];readBackupFile(file);e.target.value=""}});
 $("search").addEventListener("input",renderMenu);$("tablePick").addEventListener("click",()=>showPage("tables"));$("customerBtn").addEventListener("click",()=>{const n=prompt("Customer name (optional):",customer);if(n!==null){const previous=customer;customer=n.trim();syncDraftControls();if(!save()){customer=previous;syncDraftControls();return}}});
 $("checkout").addEventListener("click",()=>{$("modalTotal").textContent=money([...cart].reduce((s,[id,v])=>s+products.find(p=>p.id===id).price*v.qty,0));$("payModal").classList.add("open")});$("cancelPay").addEventListener("click",()=>$("payModal").classList.remove("open"));$("payModal").addEventListener("click",e=>{if(e.target===$("payModal"))$("payModal").classList.remove("open")});
-$("confirmPay").addEventListener("click",()=>{if(!cart.size)return;for(const [id,v] of cart){if((stock[id]||0)<v.qty){notify("Insufficient stock for "+(products.find(p=>p.id===id)?.name||"this item"));return}}const items=[...cart].map(([id,v])=>({id,name:products.find(p=>p.id===id).name,price:products.find(p=>p.id===id).price,qty:v.qty}));const total=items.reduce((s,x)=>s+x.price*x.qty,0),sale={id:nextId,time:new Date().toISOString(),type:orderType,table:orderType==="Dine in"?tableNo:null,customer,payment,total,items:items.map(({id,...item})=>item)};const previous={sales:sales.slice(),stock:{...stock},tickets:tickets.slice(),occupied:{...occupied},nextId,stockAdjustments,cart:cloneCart()};nextId++;sales.unshift(sale);for(const [id,v] of cart){const before=stock[id]||0;stock[id]=before-v.qty;recordStockAdjustment(id,before,stock[id],"Sale #"+sale.id,"Sale")}if(orderType==="Dine in"){tickets.unshift({...sale,done:false});occupied[tableNo]=sale.id}cart.clear();if(!save()){sales=previous.sales;stock=previous.stock;tickets=previous.tickets;occupied=previous.occupied;nextId=previous.nextId;cart=previous.cart;renderCart();stockAdjustments=previous.stockAdjustments;renderInventory();renderReports();renderTables();return}cart.clear();renderCart();renderMenu();$("payModal").classList.remove("open");renderInventory();renderReports();renderTables();showPage("pos");notify("Saved order #"+sale.id+" · "+money(total));if(confirm("Order saved. Open receipt for printing?"))printReceipt(sale)});
+$("confirmPay").addEventListener("click",()=>{
+ if(!cart.size)return;
+ const currentOpenOrder=activeOpenOrderId===null?null:openOrders.find(order=>Number(order.id)===activeOpenOrderId);
+ if(activeOpenOrderId!==null&&(!currentOpenOrder||Number(currentOpenOrder.table)!==tableNo||orderType!=="Dine in"))return notify("The active table order could not be found. Reopen it from Tables.");
+ for(const [id,item] of cart){if((stock[id]||0)<item.qty){notify("Insufficient stock for "+cartLineName(id,item));return}}
+ const fullItems=[...cart].map(([id,item])=>({id:Number(id),name:cartLineName(id,item),price:cartLinePrice(id,item),qty:item.qty}));
+ const total=fullItems.reduce((sum,item)=>sum+item.price*item.qty,0),saleId=currentOpenOrder?Number(currentOpenOrder.id):nextId;
+ const sale={id:saleId,time:new Date().toISOString(),type:orderType,table:orderType==="Dine in"?tableNo:null,customer,payment,total,items:fullItems.map(({id,...item})=>item)};
+ const previous={sales:sales.slice(),stock:{...stock},tickets:tickets.map(ticket=>({...ticket,items:Array.isArray(ticket.items)?ticket.items.map(item=>({...item})):[]})),occupied:{...occupied},nextId,stockAdjustments:stockAdjustments.map(entry=>({...entry})),openOrders:cloneOpenOrders(),activeOpenOrderId,cart:cloneCart()};
+ if(!currentOpenOrder)nextId++;
+ sales.unshift(sale);
+ for(const [id,item] of cart){const before=stock[id]||0;stock[id]=before-item.qty;recordStockAdjustment(id,before,stock[id],"Sale #"+sale.id,"Sale")}
+ if(currentOpenOrder)openOrders=openOrders.filter(order=>Number(order.id)!==Number(currentOpenOrder.id));
+ if(orderType==="Dine in"){
+  const ticketIndex=tickets.findIndex(ticket=>Number(ticket.id)===Number(sale.id)),wasDone=ticketIndex>=0&&!!tickets[ticketIndex].done;
+  const finalTicket={...sale,done:wasDone};
+  if(ticketIndex>=0)tickets[ticketIndex]=finalTicket;else tickets.unshift(finalTicket);
+  occupied[tableNo]=sale.id
+ }
+ activeOpenOrderId=null;cart.clear();
+ if(!save()){
+  sales=previous.sales;stock=previous.stock;tickets=previous.tickets;occupied=previous.occupied;nextId=previous.nextId;stockAdjustments=previous.stockAdjustments;openOrders=previous.openOrders;activeOpenOrderId=previous.activeOpenOrderId;cart=previous.cart;
+  syncDraftControls();renderCart();renderInventory();renderReports();renderTables();renderKitchen();return
+ }
+ cart.clear();syncDraftControls();renderCart();renderMenu();$("payModal").classList.remove("open");renderInventory();renderReports();renderTables();renderKitchen();showPage("pos");notify("Saved order #"+sale.id+" · "+money(total));if(confirm("Order saved. Open receipt for printing?"))printReceipt(sale)
+});
 $("shiftBtn").addEventListener("click",()=>notify("Shift open · "+sales.length+" saved orders"));$("clearKitchen").addEventListener("click",()=>{const previous=tickets;tickets=tickets.filter(t=>!t.done);if(!save()){tickets=previous;return}renderKitchen()});
 renderMenu();renderCart();renderTables();renderInventory();renderReports();
 if(nativeStorageUnavailable){const status=$("connectionStatus");if(status){status.textContent="Local storage error · writes blocked";status.title="The local database could not be read. No changes will be committed. Restart the app after storage is repaired."}notify("Local database could not be read. Changes are disabled to protect saved sales.");}
