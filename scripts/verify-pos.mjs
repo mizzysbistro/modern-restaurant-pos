@@ -32,6 +32,7 @@ const checks = [
   ["Web frontend writes native durable state", scriptMatch[1].includes("window.PosStorage.saveState(payload)") && scriptMatch[1].includes("window.PosStorage.restoreState(payload)")],
   ["Legacy WebView state migrates to native storage", scriptMatch[1].includes("migrate the existing")],
   ["Checkout retains cart on persistence failure", scriptMatch[1].includes("if(!save()){sales=previous.sales")],
+  ["Kitchen ticket is rolled back if the ready state cannot be saved", scriptMatch[1].includes("const index=Number(x.dataset.done),ticket=tickets[index]") && scriptMatch[1].includes("if(!save()){ticket.done=wasDone;renderKitchen();return}")],
   ["Checkout rejects quantities beyond available stock", scriptMatch[1].includes("Insufficient stock for")],
   ["APK workflow increments versionCode", workflow.includes("versionCode $GITHUB_RUN_NUMBER")],
   ["APK uses an explicit stable signing keystore", gradle.includes('storeFile rootProject.file(".signing/debug.keystore")')],
