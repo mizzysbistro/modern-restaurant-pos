@@ -33,7 +33,16 @@ const checks = [
   ["Workflow runs Android instrumentation tests", workflow.includes("connectedDebugAndroidTest")],
   ["SQLite instrumentation tests cover durable persistence", instrumentation.includes("savesAndReloadsSnapshotAfterDatabaseReopen")],
   ["SQLite instrumentation tests reject invalid writes", instrumentation.includes("invalidReplacementDoesNotOverwriteLastCommittedSnapshot")],
-  ["APK workflow uses the persistent signing cache", workflow.includes("mizzy-pos-persistent-debug-signing-v1")]
+  ["APK workflow uses the persistent signing cache", workflow.includes("mizzy-pos-persistent-debug-signing-v1")],
+  ["POS reports expose full-data backup and restore controls", scriptMatch[1].includes('id="exportBackup"') && scriptMatch[1].includes('id="importBackup"')],
+  ["Backup export includes format/version and all POS state", scriptMatch[1].includes('format:"mizzy-bistro-pos-backup"') && scriptMatch[1].includes("schemaVersion:1") && scriptMatch[1].includes("state:{products,sales,stock,tickets,tables:occupied,nextId}")],
+  ["Backup import validates contents before replacement", scriptMatch[1].includes("function validateBackupDocument(doc)") && scriptMatch[1].includes("The backup contains an invalid sale record.")],
+  ["Backup restore warns before replacing current data", scriptMatch[1].includes("It will replace the POS menu, sales, stock, kitchen tickets and table status")],
+  ["Backup restore rolls back in-memory state after save failure", scriptMatch[1].includes("Existing data was kept.")],
+  ["Native backup export validates the document", activity.includes("isValidBackupDocument") && activity.includes("mizzy-bistro-pos-backup")],
+  ["Native backup export uses Android document picker", activity.includes("Intent.ACTION_CREATE_DOCUMENT") && activity.includes("REQUEST_CREATE_BACKUP")],
+  ["WebView supports picking restore file", activity.includes("onShowFileChooser") && activity.includes("REQUEST_FILE_CHOOSER")],
+  ["Backup import limits file size", scriptMatch[1].includes("const MAX_BACKUP_BYTES=10*1024*1024") && scriptMatch[1].includes("file.size>MAX_BACKUP_BYTES")]
 ];
 
 const failed = checks.filter(([, passed]) => !passed);
