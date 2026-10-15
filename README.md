@@ -10,10 +10,13 @@ An offline-first restaurant POS for Android tablets, initially focused on PHP pr
 - Durable local state: Android SQLite database through a JavaScript bridge
 - Legacy-data migration: on first launch of a SQLite-enabled build, the current WebView localStorage state is loaded and saved into SQLite without intentionally resetting records
 - JSON backup/restore UI: the Reports page can export the full POS state and restore a validated backup after an explicit replacement confirmation
-- Native Android file saving: backup export uses the Android document picker; restore uses the Android file chooser
+- Native Android file saving: backup and CSV export use the Android document picker; restore uses the Android file chooser
+- Native Android receipt print dialog using the system Print Framework (printer compatibility still depends on installed Android print services)
+- Live table occupancy counts, explicit table release, and local-only online/offline status indication
+- HTML escaping for staff-entered menu, kitchen, and receipt text
 - Build automation: GitHub Actions produces a debug APK artifact
 
-The SQLite implementation is currently an **atomic JSON snapshot** of menu, sales, stock, kitchen tickets, table occupancy, and the order counter. It is a safer first step than browser storage alone, but it is not yet a normalized production database. High-volume transaction history, open-cart recovery, database migration hardening, and tablet update acceptance tests remain in the roadmap. The JSON backup feature is under validation and must be tested on the physical tablet before relying on it.
+The SQLite implementation is currently an **atomic JSON snapshot** of menu, sales, stock, kitchen tickets, table occupancy, and the order counter. It is a safer first step than browser storage alone, but it is not yet a normalized production database. High-volume transaction history, open-cart recovery, database migration hardening, and tablet update acceptance tests remain in the roadmap. The JSON backup/restore and native print features have passed source-level checks and compile tests; they have not yet been verified with the physical tablet, actual file picker, printer service, or large production data.
 
 ## Build an APK
 
