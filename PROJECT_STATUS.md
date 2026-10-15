@@ -75,7 +75,7 @@ Last reviewed: 2026-10-16
 ### Milestone 9 — Acceptance
 - [ ] Complete checkout-to-kitchen-to-receipt workflow tests on the target tablet (CI compiles Android/instrumentation tests but cannot run physical hardware acceptance).
 - [ ] Test compatible printer hardware.
-- [ ] Document limitations, backup/restore steps, signing/update prerequisites, and recovery actions.
+- [x] Document limitations, backup/restore steps, signing/update prerequisites, and recovery actions in `docs/OPERATIONS.md`.
 
 ## Workflow policy
 

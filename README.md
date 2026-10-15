@@ -16,7 +16,7 @@ An offline-first restaurant POS for Android tablets, initially focused on PHP pr
 - HTML escaping for staff-entered menu, kitchen, and receipt text
 - Build automation: GitHub Actions produces a debug APK artifact
 
-The SQLite implementation is currently an **atomic JSON snapshot** of menu, sales, stock, kitchen tickets, table occupancy, and the order counter. It is a safer first step than browser storage alone, but it is not yet a normalized production database. High-volume transaction history, open-cart recovery, database migration hardening, and tablet update acceptance tests remain in the roadmap. The JSON backup/restore and native print features have passed source-level checks and compile tests; they have not yet been verified with the physical tablet, actual file picker, printer service, or large production data.
+The current SQLite design stores completed sales in an indexed sales table and keeps menu, inventory, kitchen tickets, table occupancy, open orders, and recoverable cart context in an atomic JSON snapshot. It is more durable than browser storage alone, but it is not yet a fully normalized production database. Date-range and payment-method reports are calculated from saved sales, and table orders can be saved, continued, cancelled, and finalized using a stable order ID. The external customer display uses Android's presentation display when available, with a same-tablet fallback. CI covers static data-safety checks, regression tests, SQLite JVM tests, and Android/instrumentation compilation; physical tablet, print, external-display, real-data restore, and in-place upgrade acceptance remain outstanding.
 
 ## Build an APK
 
@@ -29,7 +29,11 @@ Each build increments Android `versionCode`. The workflow currently reuses the A
 
 ## Local development checks
 
-The workflow runs `node scripts/verify-pos.mjs` to parse the POS JavaScript and check critical data-safety rules before assembling the APK.
+The workflows run `node scripts/verify-pos.mjs` and `node --test tests/*.test.cjs`, then run SQLite JVM tests and compile the Android app and instrumentation tests. Pull requests into `main` run the same validation workflow.
+
+## Operations and recovery
+
+See [the POS operations runbook](docs/OPERATIONS.md) before updating the tablet, restoring a backup, or using the POS for live service.
 
 ## Important limitations
 
