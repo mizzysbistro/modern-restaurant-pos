@@ -90,8 +90,9 @@ public final class PosStorageInstrumentedTest {
     @Test
     public void normalSaveCannotRewriteAnExistingSaleId() throws JSONException {
         assertTrue(storage.saveState(VALID_SNAPSHOT));
-        String changedSale = VALID_SNAPSHOT.replace("\\"total\\":100", "\\"total\\":1");
-        assertFalse(storage.saveState(changedSale));
+        JSONObject changedRoot = new JSONObject(VALID_SNAPSHOT);
+        changedRoot.getJSONArray("sales").getJSONObject(0).put("total", 1);
+        assertFalse(storage.saveState(changedRoot.toString()));
         assertSaleIds(storage.loadState(), 1001L);
     }
 
