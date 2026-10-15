@@ -12,8 +12,13 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.text.ParsePosition;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.HashSet;
+import java.util.Locale;
 import java.util.Set;
+import java.util.TimeZone;
 
 /**
  * Local POS persistence. The WebView keeps its legacy snapshot API while
@@ -318,6 +323,28 @@ public final class PosStorage extends SQLiteOpenHelper {
         return left.equals(right);
     }
 
+    /** Accept the ISO-style timestamps emitted by the POS and supported legacy backups. */
+    private static boolean isValidTimestamp(String value) {
+        if (value == null || value.isEmpty() || value.length() > 100) return false;
+        String[] patterns = {
+            "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'",
+            "yyyy-MM-dd'T'HH:mm:ss'Z'",
+            "yyyy-MM-dd'T'HH:mm:ss.SSSXXX",
+            "yyyy-MM-dd'T'HH:mm:ssXXX",
+            "yyyy-MM-dd'T'HH:mm:ss.SSS",
+            "yyyy-MM-dd'T'HH:mm:ss"
+        };
+        for (String pattern : patterns) {
+            SimpleDateFormat format = new SimpleDateFormat(pattern, Locale.US);
+            format.setLenient(false);
+            format.setTimeZone(TimeZone.getTimeZone("UTC"));
+            ParsePosition position = new ParsePosition(0);
+            Date parsed = format.parse(value, position);
+            if (parsed != null && position.getIndex() == value.length()) return true;
+        }
+        return false;
+    }
+
     private boolean upsertSale(SQLiteDatabase db, JSONObject sale) {
         long saleId = saleId(sale);
         Object rawTotal = sale.opt("total");
@@ -330,7 +357,7 @@ public final class PosStorage extends SQLiteOpenHelper {
             !Double.isFinite(((Number) rawTotal).doubleValue()) ||
             ((Number) rawTotal).doubleValue() < 0 ||
             ((Number) rawTotal).doubleValue() > 1_000_000_000d ||
-            soldAt.isEmpty() || soldAt.length() > 100 ||
+            !isValidTimestamp(soldAt) ||
             payment.trim().isEmpty() || payment.length() > 80 ||
             !("Dine in".equals(type) || "Takeaway".equals(type)) ||
             items == null || items.length() < 1 || items.length() > 500) {
@@ -477,7 +504,7 @@ public final class PosStorage extends SQLiteOpenHelper {
                 to != Math.rint(to) ||
                 !Double.isFinite(delta) || delta != Math.rint(delta) ||
                 delta != to - from ||
-                time.isEmpty() || time.length() > 100 ||
+                !isValidTimestamp(time) ||
                 name.trim().isEmpty() || name.length() > 200 ||
                 reason.trim().isEmpty() || reason.length() > 160 ||
                 !("Manual".equals(source) || "Sale".equals(source))) {
@@ -503,7 +530,7 @@ public final class PosStorage extends SQLiteOpenHelper {
         Set<Long> ids=new HashSet<>();java.util.Map<Long,String> actions=new java.util.HashMap<>();java.util.Map<Long,Long> sums=new java.util.HashMap<>();java.util.Map<Long,Integer> counts=new java.util.HashMap<>();long lastId=0;
         for(int i=0;i<events.length();i++){JSONObject e=events.optJSONObject(i);if(e==null)return false;long id=saleId(e);Object rawSale=e.opt("saleId"),rawAmount=e.opt("amountCents");if(id<1||id<=lastId||!ids.add(id)||!(rawSale instanceof Number)||!(rawAmount instanceof Number))return false;
           double ds=((Number)rawSale).doubleValue(),da=((Number)rawAmount).doubleValue();if(!Double.isFinite(ds)||ds<1||ds!=Math.rint(ds)||ds>Long.MAX_VALUE||!Double.isFinite(da)||da<0||da!=Math.rint(da)||da>Long.MAX_VALUE)return false;long sid=(long)ds,amount=(long)da;Long total=totals.get(sid);
-          String action=e.optString("action",""),time=e.optString("time",""),reason=e.optString("reason",""),staff=e.optString("staff","");if(total==null||amount>total||(!"VOID".equals(action)&&!"REFUND".equals(action))||("REFUND".equals(action)&&amount<1)||time.isEmpty()||time.length()>100||reason.trim().isEmpty()||reason.length()>160||staff.trim().isEmpty()||staff.length()>80)return false;
+          String action=e.optString("action",""),time=e.optString("time",""),reason=e.optString("reason",""),staff=e.optString("staff","");if(total==null||amount>total||(!"VOID".equals(action)&&!"REFUND".equals(action))||("REFUND".equals(action)&&amount<1)||!isValidTimestamp(time)||reason.trim().isEmpty()||reason.length()>160||staff.trim().isEmpty()||staff.length()>80)return false;
           String old=actions.get(sid);int count=counts.getOrDefault(sid,0);long sum=sums.getOrDefault(sid,0L);if(old!=null&&!old.equals(action))return false;
           if("VOID".equals(action)){if(count>0||amount!=total)return false;sums.put(sid,total);}else{if(sum+amount<sum||sum+amount>total)return false;sums.put(sid,sum+amount);}actions.put(sid,action);counts.put(sid,count+1);lastId=id;
         }return true;
@@ -633,8 +660,8 @@ public final class PosStorage extends SQLiteOpenHelper {
                 String createdAt = order.optString("createdAt", "");
                 String updatedAt = order.optString("updatedAt", createdAt);
                 String orderCustomer = order.optString("customer", "");
-                if (createdAt.isEmpty() || createdAt.length() > 100 ||
-                    updatedAt.isEmpty() || updatedAt.length() > 100 ||
+                if (!isValidTimestamp(createdAt) ||
+                    !isValidTimestamp(updatedAt) ||
                     orderCustomer.length() > 200) return false;
 
                 for (int itemIndex = 0; itemIndex < items.length(); itemIndex++) {

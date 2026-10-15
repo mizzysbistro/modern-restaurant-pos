@@ -97,6 +97,21 @@ public final class PosStorageInstrumentedTest {
     }
 
     @Test
+    public void rejectsSalesWithInvalidTimestamps() throws JSONException {
+        assertTrue(storage.saveState(VALID_SNAPSHOT));
+        JSONObject root = new JSONObject(VALID_SNAPSHOT);
+        JSONObject invalidSale = new JSONObject(SALE);
+        invalidSale.put("id", 1002);
+        invalidSale.put("time", "not-a-date");
+        invalidSale.put("type", "Takeaway");
+        invalidSale.put("table", JSONObject.NULL);
+        root.getJSONArray("sales").put(invalidSale);
+        root.put("nextId", 1003);
+        assertFalse(storage.saveState(root.toString()));
+        assertSaleIds(storage.loadState(), 1001L);
+    }
+
+    @Test
     public void rejectsSaleWhenTotalDoesNotMatchItemSubtotal() throws JSONException {
         assertTrue(storage.saveState(VALID_SNAPSHOT));
         String invalidSale =
