@@ -9,7 +9,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: validate-pos-backup-restore
+  # Keep one commit's test run from cancelling another commit's validation.
+  group: validate-pos-backup-restore-${{ github.sha }}
   cancel-in-progress: true
 
 jobs:
