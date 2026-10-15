@@ -1,0 +1,24 @@
+name: Validate POS Backup and Restore
+
+on:
+  push:
+    branches: [feature/backup-restore]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check POS frontend and backup safety
+        run: node scripts/verify-pos.mjs
+      - name: Run backup validation tests
+        run: node --test tests/backup-schema.test.cjs
