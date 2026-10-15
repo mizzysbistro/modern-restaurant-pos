@@ -8,9 +8,14 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: mizzy-pos-apk-build-v2
+  cancel-in-progress: true
+
 jobs:
   build-apk:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
@@ -20,7 +25,8 @@ jobs:
           distribution: temurin
           java-version: '17'
       - name: Restore explicit debug signing key
-        uses: actions/cache@v4
+        id: restore-signing
+        uses: actions/cache/restore@v4
         with:
           path: .signing/debug.keystore
           key: mizzy-pos-persistent-debug-signing-v1
@@ -36,6 +42,12 @@ jobs:
           else
             keytool -genkeypair -v -keystore .signing/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Mizzy's Bistro POS, OU=Development, O=Mizzy's Bistro, C=PH" -noprompt
           fi
+      - name: Save signing key before test/build steps
+        if: steps.restore-signing.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: .signing/debug.keystore
+          key: mizzy-pos-persistent-debug-signing-v1
       - name: Set up Android SDK
         run: |
           echo "ANDROID_HOME=${ANDROID_HOME:-/usr/local/lib/android/sdk}" >> "$GITHUB_ENV"
@@ -55,14 +67,8 @@ jobs:
         run: |
           sed -i "s/versionCode 1/versionCode $GITHUB_RUN_NUMBER/" app/build.gradle
           sed -i "s/versionName '1.0.0'/versionName '1.0.$GITHUB_RUN_NUMBER'/" app/build.gradle
-      - name: Run SQLite instrumentation tests
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: 35
-          target: google_apis
-          arch: x86_64
-          disable-animations: true
-          script: gradle --no-daemon connectedDebugAndroidTest
+      - name: Run SQLite JVM tests and compile device tests
+        run: gradle --no-daemon testDebugUnitTest assembleDebugAndroidTest
       - name: Build debug APK
         run: gradle --no-daemon assembleDebug
       - name: Verify APK signature matches persistent key
