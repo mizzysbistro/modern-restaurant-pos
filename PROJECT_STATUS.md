@@ -29,7 +29,7 @@ Last reviewed: 2026-10-16
 - [x] Inspect native storage implementation and frontend bridge usage.
 - [x] Validate snapshots and block writes after native database read/parse failures rather than initialize defaults.
 - [x] Add validated full backup export and user-confirmed restore with rollback on save failure.
-- [x] Add persistence, legacy-migration, restore, corruption, and error-recovery regression tests.
+- [x] Add persistence, legacy-migration, restore, corruption, error-recovery, and crash-recoverable cart regression tests.
 - [x] Implement versioned v1-to-v2 sales-table migration without intentionally deleting prior sales.
 
 ### Milestone 2 — Core checkout
@@ -39,6 +39,7 @@ Last reviewed: 2026-10-16
 - [ ] Add explicit staff-attributed void/refund auditing and a distinct paid/void/refund state model.
 
 ### Milestone 3 — Offline operation
+- [x] Persist the open cart and checkout selections on each edit, restore after app restart, and atomically clear the draft with the completed sale; tests cover database reopen and invalid draft rejection.
 - [ ] Complete checkout/report acceptance tests with internet explicitly disabled on the target tablet.
 - [x] Display local-only online/offline status; cloud synchronization is explicitly not configured.
 
@@ -60,6 +61,7 @@ Last reviewed: 2026-10-16
 
 ### Milestone 7 — Security and production hardening
 - [x] Add source-level checks for WebView bridge exposure/navigation, HTML escaping, input validation, and persistence error recovery.
+- [x] Add automated backup validation for optional recoverable carts and checkout context while preserving legacy backup compatibility.
 - [ ] Test backup/restore and interrupted writes using a copy of real production-like database data.
 - [ ] Add staff access control and explicit void/refund audit flows.
 
