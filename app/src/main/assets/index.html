@@ -77,9 +77,9 @@ let cart=new Map(),category="All",orderType="Dine in",tableNo=4,payment="Cash",c
 const money=n=>"₱"+Number(n||0).toLocaleString("en-PH",{minimumFractionDigits:2,maximumFractionDigits:2});
 const esc=value=>String(value==null?"":value).replace(/[&<>"']/g,char=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char]));
 const $=id=>document.getElementById(id);
-function save(){
+function save(options={}){
 const snapshot={products,sales,stock,tickets,tables:occupied,nextId};
-if(window.PosStorage){let ok=false;try{ok=window.PosStorage.saveState(JSON.stringify(snapshot))===true}catch(e){ok=false}if(!ok){notify("Local database save failed. The change was not committed.");return false}}
+if(window.PosStorage){let ok=false;try{const payload=JSON.stringify(snapshot);ok=options.replaceSales===true&&typeof window.PosStorage.restoreState==="function"?window.PosStorage.restoreState(payload)===true:window.PosStorage.saveState(payload)===true}catch(e){ok=false}if(!ok){notify("Local database save failed. The change was not committed.");return false}}
 try{for(const [k,v] of Object.entries(snapshot))localStorage.setItem(STORE+":"+k,JSON.stringify(v))}catch(e){if(!window.PosStorage){notify("Could not save local data. Check device storage.");return false}}
 return true
 }
@@ -112,7 +112,7 @@ function restoreBackupDocument(doc){
  if(!confirm("Restore this backup? It will replace the POS menu, sales, stock, kitchen tickets and table status currently on this tablet. Export a backup of current data first."))return false;
  const previous={products,sales,stock,tickets,occupied,nextId};
  products=st.products;sales=st.sales;stock=st.stock;tickets=st.tickets;occupied=st.tables;nextId=st.nextId;cart.clear();
- if(!save()){products=previous.products;sales=previous.sales;stock=previous.stock;tickets=previous.tickets;occupied=previous.occupied;nextId=previous.nextId;updateConnectionStatus();renderMenu();renderCart();renderTables();renderInventory();renderReports();notify("Restore failed. Existing data was kept.");return false}
+ if(!save({replaceSales:true})){products=previous.products;sales=previous.sales;stock=previous.stock;tickets=previous.tickets;occupied=previous.occupied;nextId=previous.nextId;updateConnectionStatus();renderMenu();renderCart();renderTables();renderInventory();renderReports();notify("Restore failed. Existing data was kept.");return false}
  renderMenu();renderCart();renderTables();renderInventory();renderReports();showPage("pos");notify("POS backup restored successfully.");return true
 }
 const MAX_BACKUP_BYTES=10*1024*1024;
