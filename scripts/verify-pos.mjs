@@ -45,7 +45,7 @@ const checks = [
   ["JVM tests cover corrupt snapshots and orphaned sale history", unitTests.includes("loadStateReturnsExplicitErrorWhenStoredPayloadIsCorrupt") && unitTests.includes("missingSnapshotWithHistoricalSalesIsNotTreatedAsFirstLaunch")],
   ["Instrumentation tests cover orphaned sale history", instrumentation.includes("loadFailureIsExplicitAndDoesNotLookLikeFirstLaunch")],
   ["Normal POS saves preserve immutable historical sale content", storage.includes("saleMatchesExisting") && storage.includes("existing.similar(sale)")],
-  ["Native state validation prevents sale ID reuse", pos.includes("id >= nextIdLong")],
+  ["Native state validation prevents sale ID reuse", storage.includes("id >= nextIdLong")],
   ["JVM and instrumentation tests cover duplicate order IDs", unit.includes("normalSaveCannotRewriteAnExistingSaleId") && unit.includes("rejectsNextIdThatWouldReuseAnExistingSaleId") && instrumentation.includes("normalSaveCannotRewriteAnExistingSaleId") && instrumentation.includes("rejectsNextIdThatWouldReuseAnExistingSaleId")],
   ["Frontend repairs stale next-order counters from saved sales", html.includes("maxSavedSaleId+1") && html.includes("nativeState&&nextId!==nativeState.nextId")],
   ["APK workflow uses the persistent signing cache", workflow.includes("mizzy-pos-persistent-debug-signing-v1")],
