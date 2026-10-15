@@ -5,6 +5,7 @@ import path from "node:path";
 const root = process.cwd();
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), "utf8");
 const html = read("app/src/main/assets/index.html");
+const backupSchema = read("app/src/main/assets/backup-schema.js");
 const activity = read("app/src/main/java/com/mizzysbistro/pos/MainActivity.java");
 const storage = read("app/src/main/java/com/mizzysbistro/pos/PosStorage.java");
 const gradle = read("app/build.gradle");
@@ -36,7 +37,7 @@ const checks = [
   ["APK workflow uses the persistent signing cache", workflow.includes("mizzy-pos-persistent-debug-signing-v1")],
   ["POS reports expose full-data backup and restore controls", scriptMatch[1].includes('id="exportBackup"') && scriptMatch[1].includes('id="importBackup"')],
   ["Backup export includes format/version and all POS state", scriptMatch[1].includes('format:"mizzy-bistro-pos-backup"') && scriptMatch[1].includes("schemaVersion:1") && scriptMatch[1].includes("state:{products,sales,stock,tickets,tables:occupied,nextId}")],
-  ["Backup import validates contents before replacement", scriptMatch[1].includes("function validateBackupDocument(doc)") && scriptMatch[1].includes("The backup contains an invalid sale record.")],
+  ["Backup import validates contents before replacement", scriptMatch[1].includes("window.MizzyBackup.validateBackupDocument(doc)") && backupSchema.includes("The backup contains an invalid sale record.")],
   ["Backup restore warns before replacing current data", scriptMatch[1].includes("It will replace the POS menu, sales, stock, kitchen tickets and table status")],
   ["Backup restore rolls back in-memory state after save failure", scriptMatch[1].includes("Existing data was kept.")],
   ["Native backup export validates the document", activity.includes("isValidBackupDocument") && activity.includes("mizzy-bistro-pos-backup")],
