@@ -139,6 +139,7 @@ document.querySelectorAll("[data-pay]").forEach(button=>button.classList.toggle(
 const tablePick=$("tablePick");if(tablePick){tablePick.textContent="Table "+String(tableNo).padStart(2,"0")+" ▾";tablePick.style.display=orderType==="Dine in"?"block":"none"}
 const customerButton=$("customerBtn");if(customerButton)customerButton.textContent=customer?"♙ "+customer:"＋ Customer";
 const saveTableButton=$("saveTableOrder");if(saveTableButton){saveTableButton.style.display=orderType==="Dine in"?"block":"none";saveTableButton.disabled=orderType!=="Dine in"||cart.size===0;saveTableButton.textContent=(activeOpenOrderId===null?"Save":"Update")+" order to Table "+String(tableNo).padStart(2,"0")}
+const displayToggle=$("customerDisplayToggle");if(displayToggle){const enabled=customerDisplayMode||customerDisplayExternal;displayToggle.textContent=enabled?"Close customer display":"Customer display";displayToggle.setAttribute("aria-pressed",String(enabled))}
 }
 
 function customerDisplayPayload(){

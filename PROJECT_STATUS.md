@@ -52,7 +52,8 @@ Last reviewed: 2026-10-16
 ### Milestone 5 — Receipts and customer display
 - [x] Integrate the Android system print dialog through the Print Framework.
 - [ ] Verify actual printer model/protocol, receipt layout, paper width, and physical print behavior.
-- [ ] Add customer-facing display mode.
+- [ ] Test customer display on the target tablet with a real external presentation display attached; CI validates parsing and compilation, not physical display routing.
+- [x] Add customer-facing display mode with a validated Android secondary `Presentation` when an external display is connected and a full-screen same-tablet fallback.
 
 ### Milestone 6 — Reporting
 - [x] Add date-range and payment-method breakdowns calculated from locally persisted sales, including payment-method totals and filtered/all-sales CSV exports.
