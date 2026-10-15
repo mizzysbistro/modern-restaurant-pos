@@ -46,7 +46,7 @@ Last reviewed: 2026-10-16
 ### Milestone 4 — Restaurant operations
 - [x] Record manual stock adjustments with a reason and log stock consumption during checkout.
 - [x] Validate persisted/backup table occupancy against the matching dine-in sale; table release requires confirmation and rolls back in-memory changes if saving fails.
-- [ ] Implement true open table orders/adding items to an existing table order.
+- [x] Implement persisted open table orders with start/continue/cancel actions, stable order IDs, kitchen ticket updates, validated table ownership, and checkout settlement of the same order ID. Completed occupied tables cannot be overwritten by direct checkout.
 - [x] Persist kitchen ticket ready-state transitions and roll back the UI change when saving fails.
 
 ### Milestone 5 — Receipts and customer display
@@ -62,6 +62,7 @@ Last reviewed: 2026-10-16
 ### Milestone 7 — Security and production hardening
 - [x] Add source-level checks for WebView bridge exposure/navigation, HTML escaping, input validation, and persistence error recovery.
 - [x] Add automated backup validation for optional recoverable carts and checkout context while preserving legacy backup compatibility.
+- [x] Add automated coverage for valid/invalid open table orders, table ownership, active-order context and draft price/name snapshots.
 - [ ] Test backup/restore and interrupted writes using a copy of real production-like database data.
 - [ ] Add staff access control and explicit void/refund audit flows.
 
@@ -71,7 +72,7 @@ Last reviewed: 2026-10-16
 - [ ] Verify installed-app signer match and an in-place upgrade retaining existing sales on a test device.
 
 ### Milestone 9 — Acceptance
-- [ ] Complete checkout-to-kitchen-to-receipt workflow tests on the target tablet.
+- [ ] Complete checkout-to-kitchen-to-receipt workflow tests on the target tablet (CI compiles Android/instrumentation tests but cannot run physical hardware acceptance).
 - [ ] Test compatible printer hardware.
 - [ ] Document limitations, backup/restore steps, signing/update prerequisites, and recovery actions.
 
