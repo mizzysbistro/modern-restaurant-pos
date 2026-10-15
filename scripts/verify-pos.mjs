@@ -9,6 +9,8 @@ const backupSchema = read("app/src/main/assets/backup-schema.js");
 const reporting = read("app/src/main/assets/reporting.js");
 const reportingTests = read("tests/reporting.test.cjs");
 const activity = read("app/src/main/java/com/mizzysbistro/pos/MainActivity.java");
+const customerDisplayState = read("app/src/main/java/com/mizzysbistro/pos/CustomerDisplayState.java");
+const customerDisplayTests = read("app/src/test/java/com/mizzysbistro/pos/CustomerDisplayStateTest.java");
 const storage = read("app/src/main/java/com/mizzysbistro/pos/PosStorage.java");
 const gradle = read("app/build.gradle");
 const workflow = read(".github/workflows/build-apk.yml");
@@ -93,7 +95,10 @@ const checks = [
   ["JVM and device tests cover open-table persistence and table ownership failures", unitTests.includes("openTableOrderPersistsAndOwnsTableOccupancy") && instrumentation.includes("openTableOrderPersistsAndOwnsTableOccupancy") && unitTests.includes("rejectsOpenTableOrderThatDoesNotOwnItsTable") && instrumentation.includes("rejectsOpenTableOrderThatDoesNotOwnItsTable")],
   ["Table overview supports starting, continuing and cancelling persistent table orders", scriptMatch[1].includes("function saveTableOrder()") && scriptMatch[1].includes("data-cancel-open-order") && scriptMatch[1].includes("Continue order")],
   ["Checkout finalizes the same open-table order ID without duplicating kitchen tickets", scriptMatch[1].includes("saleId=currentOpenOrder?Number(currentOpenOrder.id):nextId") && scriptMatch[1].includes("openOrders=openOrders.filter(order=>Number(order.id)!==Number(currentOpenOrder.id))") && scriptMatch[1].includes("const finalTicket={...sale,done:wasDone}")],
-  ["Completed occupied tables cannot be overwritten by direct checkout", scriptMatch[1].includes('This table is still occupied by a completed order. Release it in Tables before starting another order.')],
+  ["Completed occupied tables cannot be overwritten by direct checkout", scriptMatch[1].includes('This table is still occupied by a completed order. Release it in Tables before starting another order.')],,
+  ["Native customer display validates payloads and manages Android Presentation lifecycle", activity.includes("hasCustomerDisplay") && activity.includes("setCustomerDisplayEnabled") && activity.includes("customerDisplayListener") && activity.includes("new CustomerDisplayPresentation") && customerDisplayState.includes("MAX_JSON_CHARS")],
+  ["Customer display provides external-screen handoff and same-device fallback", html.includes('id="customerDisplayOverlay"') && html.includes('id="customerDisplayToggle"') && scriptMatch[1].includes("function startCustomerDisplay()") && scriptMatch[1].includes("function renderCustomerDisplay(") && scriptMatch[1].includes("window.PosFiles.updateCustomerDisplay")],
+  ["Customer display parser tests cover totals, unsafe inputs and payload bounds", customerDisplayTests.includes("rejectsTotalsThatDoNotMatchLineItems") && customerDisplayTests.includes("rejectsUnsafeItemAndContextValues") && customerDisplayTests.includes("rejectsMalformedAndOversizedPayloads")],
 ];
 
 const failed = checks.filter(([, passed]) => !passed);

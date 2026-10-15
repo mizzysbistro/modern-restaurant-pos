@@ -40,6 +40,6 @@ public class CustomerDisplayStateTest {
     @Test
     public void rejectsMalformedAndOversizedPayloads() {
         assertNull(CustomerDisplayState.parse("not json"));
-        assertNull(CustomerDisplayState.parse("x".repeat(CustomerDisplayState.MAX_JSON_CHARS + 1)));
+        assertNull(CustomerDisplayState.parse(new String(new char[CustomerDisplayState.MAX_JSON_CHARS + 1]).replace('\0', 'x')));
     }
 }
