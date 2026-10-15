@@ -11,6 +11,7 @@ const storage = read("app/src/main/java/com/mizzysbistro/pos/PosStorage.java");
 const gradle = read("app/build.gradle");
 const workflow = read(".github/workflows/build-apk.yml");
 const instrumentation = read("app/src/androidTest/java/com/mizzysbistro/pos/PosStorageInstrumentedTest.java");
+const unitTests = read("app/src/test/java/com/mizzysbistro/pos/PosStorageUnitTest.java");
 
 const scriptMatch = html.match(/<script>([\s\S]*?)<\/script>/);
 if (!scriptMatch) throw new Error("POS HTML must include its main script block.");
@@ -22,6 +23,10 @@ const checks = [
   ["WebView bridge navigation is restricted to bundled assets", activity.includes("isTrustedAsset") && activity.includes("shouldOverrideUrlLoading")],
   ["SQLite persists a validated JSON snapshot", storage.includes("isValidSnapshot(payload)") && storage.includes("insertWithOnConflict")],
   ["SQLite writes are transaction-wrapped", storage.includes("beginTransaction()") && storage.includes("setTransactionSuccessful()") && storage.includes("endTransaction()")],
+  ["SQLite schema stores completed sales in a separate indexed table", storage.includes("DATABASE_VERSION = 2") && storage.includes("TABLE_SALES = \"pos_sales\"") && storage.includes("idx_pos_sales_sold_at") && storage.includes("idx_pos_sales_payment")],
+  ["SQLite v1 migration preserves existing sales before clearing snapshot collection", storage.includes("migrateV1SalesIntoTable(db)") && storage.includes('root.put("sales", new JSONArray())') && storage.includes("Could not migrate an existing POS sale")],
+  ["Routine saves preserve prior sales; explicit restore replaces them", storage.includes("persistState(payload, false)") && storage.includes("persistState(payload, true)") && scriptMatch[1].includes("save({replaceSales:true})")],
+  ["Robolectric tests cover v1 migration and history preservation", unitTests.includes("migratesV1SnapshotWithoutLosingSales") && unitTests.includes("normalSaveDoesNotDeleteHistoricalSales") && unitTests.includes("explicitRestoreReplacesSales")],
   ["Web frontend loads native durable state", scriptMatch[1].includes("window.PosStorage.loadState()")],
   ["Web frontend writes native durable state", scriptMatch[1].includes("window.PosStorage.saveState(JSON.stringify(snapshot))")],
   ["Legacy WebView state migrates to native storage", scriptMatch[1].includes("migrate the existing")],
