@@ -114,10 +114,14 @@ function restoreBackupDocument(doc){
  if(!save()){products=previous.products;sales=previous.sales;stock=previous.stock;tickets=previous.tickets;occupied=previous.occupied;nextId=previous.nextId;renderMenu();renderCart();renderTables();renderInventory();renderReports();notify("Restore failed. Existing data was kept.");return false}
  renderMenu();renderCart();renderTables();renderInventory();renderReports();showPage("pos");notify("POS backup restored successfully.");return true
 }
+const MAX_BACKUP_BYTES=10*1024*1024;
 function readBackupFile(file){
- if(!file)return;if(file.size>MAX_BACKUP_BYTES){notify("Backup file is too large.");return}
- const reader=new FileReader();reader.onerror=()=>notify("Could not read the backup file.");reader.onload=()=>{try{const parsed=JSON.parse(String(reader.result));restoreBackupDocument(parsed)}catch(e){notify("This file is not valid JSON.")}};
- const MAX_BACKUP_BYTES=10*1024*1024;if(file.size>MAX_BACKUP_BYTES){notify("Backup file exceeds the 10 MB limit.");return}reader.readAsText(file)
+ if(!file)return;
+ if(file.size>MAX_BACKUP_BYTES){notify("Backup file exceeds the 10 MB limit.");return}
+ const reader=new FileReader();
+ reader.onerror=()=>notify("Could not read the backup file.");
+ reader.onload=()=>{try{const parsed=JSON.parse(String(reader.result));restoreBackupDocument(parsed)}catch(e){notify("This file is not valid JSON.")}};
+ reader.readAsText(file)
 }
 function showPage(page){document.querySelectorAll(".navbtn").forEach(b=>b.classList.toggle("active",b.dataset.page===page));$("posPage").style.display=page==="pos"?"block":"none";["tables","kitchen","inventory","reports"].forEach(p=>$(p+"Page").classList.toggle("show",p===page));$("pageTitle").textContent=({pos:"Good afternoon, Mizzy ✳",tables:"Your dining room",kitchen:"Kitchen display",inventory:"Stock & ingredients",reports:"Your business at a glance"})[page];if(page==="tables")renderTables();if(page==="kitchen")renderKitchen();if(page==="inventory")renderInventory();if(page==="reports")renderReports()}
 function editItem(id){const p=products.find(p=>p.id===id);if(!p)return;const before={...p},name=prompt("Item name:",p.name);if(name===null)return;const price=Number(prompt("Price in PHP:",p.price));if(!name.trim()||!Number.isFinite(price)||price<=0)return notify("Please enter a name and valid price");p.name=name.trim();p.price=price;p.cat=(prompt("Category:",p.cat)||p.cat).trim();if(!save())Object.assign(p,before);else notify("Menu item saved");renderMenu();renderInventory()}
