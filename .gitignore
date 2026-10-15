@@ -1,0 +1,5 @@
+/.signing/debug.keystore
+/.signing/*.jks
+/.signing/*.keystore
+/app/build/
+/.gradle/
