@@ -46,7 +46,7 @@ const checks = [
   ["Instrumentation tests cover orphaned sale history", instrumentation.includes("loadFailureIsExplicitAndDoesNotLookLikeFirstLaunch")],
   ["Normal POS saves preserve immutable historical sale content", storage.includes("saleMatchesExisting") && storage.includes("existing.similar(sale)")],
   ["Native state validation prevents sale ID reuse", storage.includes("id >= nextIdLong")],
-  ["JVM and instrumentation tests cover duplicate order IDs", unit.includes("normalSaveCannotRewriteAnExistingSaleId") && unit.includes("rejectsNextIdThatWouldReuseAnExistingSaleId") && instrumentation.includes("normalSaveCannotRewriteAnExistingSaleId") && instrumentation.includes("rejectsNextIdThatWouldReuseAnExistingSaleId")],
+  ["JVM and instrumentation tests cover duplicate order IDs", unitTests.includes("normalSaveCannotRewriteAnExistingSaleId") && unitTests.includes("rejectsNextIdThatWouldReuseAnExistingSaleId") && instrumentation.includes("normalSaveCannotRewriteAnExistingSaleId") && instrumentation.includes("rejectsNextIdThatWouldReuseAnExistingSaleId")],
   ["Frontend repairs stale next-order counters from saved sales", html.includes("maxSavedSaleId+1") && html.includes("nativeState&&nextId!==nativeState.nextId")],
   ["APK workflow uses the persistent signing cache", workflow.includes("mizzy-pos-persistent-debug-signing-v1")],
   ["POS reports expose full-data backup and restore controls", scriptMatch[1].includes('id="exportBackup"') && scriptMatch[1].includes('id="importBackup"')],
