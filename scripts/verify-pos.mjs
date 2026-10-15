@@ -12,6 +12,7 @@ const gradle = read("app/build.gradle");
 const workflow = read(".github/workflows/build-apk.yml");
 const instrumentation = read("app/src/androidTest/java/com/mizzysbistro/pos/PosStorageInstrumentedTest.java");
 const unitTests = read("app/src/test/java/com/mizzysbistro/pos/PosStorageUnitTest.java");
+const backupTests = read("tests/backup-schema.test.cjs");
 
 const scriptMatch = html.match(/<script>([\s\S]*?)<\/script>/);
 if (!scriptMatch) throw new Error("POS HTML must include its main script block.");
