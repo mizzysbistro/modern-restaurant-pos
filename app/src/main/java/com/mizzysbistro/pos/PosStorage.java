@@ -566,6 +566,79 @@ public final class PosStorage extends SQLiteOpenHelper {
                 salesById.put(id, sale);
             }
 
+            JSONArray openOrders = root.optJSONArray("openOrders");
+            if (root.has("openOrders") && openOrders == null) return false;
+            if (openOrders == null) openOrders = new JSONArray();
+            if (openOrders.length() > 12) return false;
+
+            Set<Long> productIds = new HashSet<>();
+            for (int i = 0; i < products.length(); i++) {
+                JSONObject product = products.optJSONObject(i);
+                if (product == null) return false;
+                long productId = saleId(product);
+                if (productId < 1 || !productIds.add(productId)) return false;
+            }
+
+            java.util.Map<Long, JSONObject> openOrdersById = new java.util.HashMap<>();
+            Set<Integer> openOrderTables = new HashSet<>();
+            for (int i = 0; i < openOrders.length(); i++) {
+                JSONObject order = openOrders.optJSONObject(i);
+                if (order == null) return false;
+                long id = saleId(order);
+                Object rawTable = order.opt("table");
+                JSONArray items = order.optJSONArray("items");
+                if (id < 1 || id >= nextIdLong || !seenSaleIds.add(id) ||
+                    !(rawTable instanceof Number) || items == null ||
+                    items.length() < 1 || items.length() > 500) return false;
+                double tableValue = ((Number) rawTable).doubleValue();
+                if (!Double.isFinite(tableValue) || tableValue != Math.rint(tableValue) ||
+                    tableValue < 1 || tableValue > 12 || !openOrderTables.add((int) tableValue)) {
+                    return false;
+                }
+                String createdAt = order.optString("createdAt", "");
+                String updatedAt = order.optString("updatedAt", createdAt);
+                String orderCustomer = order.optString("customer", "");
+                if (createdAt.isEmpty() || createdAt.length() > 100 ||
+                    updatedAt.isEmpty() || updatedAt.length() > 100 ||
+                    orderCustomer.length() > 200) return false;
+
+                for (int itemIndex = 0; itemIndex < items.length(); itemIndex++) {
+                    JSONObject item = items.optJSONObject(itemIndex);
+                    if (item == null) return false;
+                    long itemProductId = saleId(item);
+                    Object rawPrice = item.opt("price");
+                    Object rawQuantity = item.opt("qty");
+                    String itemName = item.optString("name", "");
+                    if (itemProductId < 1 || !productIds.contains(itemProductId) ||
+                        !(rawPrice instanceof Number) || !(rawQuantity instanceof Number) ||
+                        itemName.trim().isEmpty() || itemName.length() > 200) return false;
+                    double price = ((Number) rawPrice).doubleValue();
+                    double quantity = ((Number) rawQuantity).doubleValue();
+                    if (!Double.isFinite(price) || price < 0 || price > 100_000_000d ||
+                        !Double.isFinite(quantity) || quantity != Math.rint(quantity) ||
+                        quantity < 1 || quantity > 100000) return false;
+                }
+                openOrdersById.put(id, order);
+                Object mappedTableOrder = tables.opt(String.valueOf((int) tableValue));
+                if (!(mappedTableOrder instanceof Number) ||
+                    ((Number) mappedTableOrder).doubleValue() != id) return false;
+            }
+
+            if (root.has("activeOpenOrderId")) {
+                Object activeRaw = root.opt("activeOpenOrderId");
+                if (activeRaw != null && activeRaw != JSONObject.NULL) {
+                    if (!(activeRaw instanceof Number)) return false;
+                    double activeValue = ((Number) activeRaw).doubleValue();
+                    if (!Double.isFinite(activeValue) || activeValue < 1 ||
+                        activeValue != Math.rint(activeValue) || activeValue > Long.MAX_VALUE) {
+                        return false;
+                    }
+                    JSONObject activeOrder = openOrdersById.get((long) activeValue);
+                    if (activeOrder == null ||
+                        activeOrder.optInt("table", -1) != root.optInt("tableNo", -2)) return false;
+                }
+            }
+
             java.util.Iterator<String> tableKeys = tables.keys();
             while (tableKeys.hasNext()) {
                 String tableKey = tableKeys.next();
@@ -584,10 +657,15 @@ public final class PosStorage extends SQLiteOpenHelper {
                     rawIdValue != Math.rint(rawIdValue) || rawIdValue > Long.MAX_VALUE) {
                     return false;
                 }
-                JSONObject tableSale = salesById.get((long) rawIdValue);
-                if (tableSale == null || !"Dine in".equals(tableSale.optString("type", "")) ||
-                    tableSale.optInt("table", -1) != tableNumber) {
-                    return false;
+                JSONObject openOrder = openOrdersById.get((long) rawIdValue);
+                if (openOrder != null) {
+                    if (openOrder.optInt("table", -1) != tableNumber) return false;
+                } else {
+                    JSONObject tableSale = salesById.get((long) rawIdValue);
+                    if (tableSale == null || !"Dine in".equals(tableSale.optString("type", "")) ||
+                        tableSale.optInt("table", -1) != tableNumber) {
+                        return false;
+                    }
                 }
             }
             return true;

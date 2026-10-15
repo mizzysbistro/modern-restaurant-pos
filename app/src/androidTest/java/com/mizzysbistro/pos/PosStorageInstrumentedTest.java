@@ -229,6 +229,51 @@ public final class PosStorageInstrumentedTest {
     }
 
     @Test
+    public void openTableOrderPersistsAndOwnsTableOccupancy() throws JSONException {
+        JSONObject root = new JSONObject(VALID_SNAPSHOT);
+        JSONObject openOrder = new JSONObject();
+        openOrder.put("id", 1002);
+        openOrder.put("table", 5);
+        openOrder.put("createdAt", "2026-10-15T11:00:00.000Z");
+        openOrder.put("updatedAt", "2026-10-15T11:05:00.000Z");
+        openOrder.put("customer", "");
+        JSONArray items = new JSONArray();
+        items.put(new JSONObject().put("id", 1).put("name", "Test dish").put("price", 100).put("qty", 2));
+        openOrder.put("items", items);
+        root.put("openOrders", new JSONArray().put(openOrder));
+        root.put("tables", new JSONObject().put("5", 1002));
+        root.put("nextId", 1003);
+        root.put("activeOpenOrderId", 1002);
+        root.put("tableNo", 5);
+        root.put("orderType", "Dine in");
+        root.put("openCart", items);
+        assertTrue(storage.saveState(root.toString()));
+
+        storage.close();
+        storage = new PosStorage(context, TEST_DATABASE);
+        JSONObject restored = new JSONObject(storage.loadState());
+        assertEquals(1002, restored.getJSONArray("openOrders").getJSONObject(0).getInt("id"));
+        assertEquals(1002, restored.getJSONObject("tables").getInt("5"));
+        assertEquals(2, restored.getJSONArray("openOrders").getJSONObject(0).getJSONArray("items").getJSONObject(0).getInt("qty"));
+    }
+
+    @Test
+    public void rejectsOpenTableOrderThatDoesNotOwnItsTable() throws JSONException {
+        JSONObject root = new JSONObject(VALID_SNAPSHOT);
+        JSONObject openOrder = new JSONObject();
+        openOrder.put("id", 1002);
+        openOrder.put("table", 5);
+        openOrder.put("createdAt", "2026-10-15T11:00:00.000Z");
+        openOrder.put("items", new JSONArray().put(
+            new JSONObject().put("id", 1).put("name", "Test dish").put("price", 100).put("qty", 1)
+        ));
+        root.put("openOrders", new JSONArray().put(openOrder));
+        root.put("nextId", 1003);
+        root.put("tables", new JSONObject());
+        assertFalse(storage.saveState(root.toString()));
+    }
+
+    @Test
     public void rejectsSnapshotsMissingRequiredCollections() {
         assertFalse(storage.saveState("{\"products\":[],\"sales\":[]}"));
         assertEquals("", storage.loadState());

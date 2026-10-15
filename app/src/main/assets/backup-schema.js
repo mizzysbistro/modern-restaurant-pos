@@ -158,8 +158,49 @@
         return failure("The backup sale total does not match its items.");
       }
     }
-    if (state.nextId <= highestSaleId) {
-      return failure("The next order number must be higher than existing sales.");
+    const openOrdersById = new Map();
+    const openOrderTables = new Set();
+    const openOrders = state.openOrders === undefined ? [] : state.openOrders;
+    if (!Array.isArray(openOrders) || openOrders.length > 12) {
+      return failure("The backup contains invalid open table orders.");
+    }
+    let highestOpenOrderId = 0;
+    for (const order of openOrders) {
+      if (!order || typeof order !== "object" ||
+          !isPositiveSafeInteger(order.id) || saleIds.has(order.id) ||
+          openOrdersById.has(order.id) || order.id >= state.nextId ||
+          !Number.isSafeInteger(order.table) || order.table < 1 || order.table > 12 ||
+          openOrderTables.has(order.table) ||
+          typeof order.createdAt !== "string" || !Number.isFinite(Date.parse(order.createdAt)) ||
+          (order.updatedAt !== undefined && (typeof order.updatedAt !== "string" || !Number.isFinite(Date.parse(order.updatedAt)))) ||
+          (order.customer !== undefined && (typeof order.customer !== "string" || order.customer.length > 200)) ||
+          !Array.isArray(order.items) || order.items.length < 1 || order.items.length > LIMITS.itemsPerSale) {
+        return failure("The backup contains invalid open table orders.");
+      }
+      const itemIds = new Set();
+      for (const item of order.items) {
+        if (!item || typeof item !== "object" ||
+            !isPositiveSafeInteger(item.id) || !productIds.has(item.id) || itemIds.has(item.id) ||
+            typeof item.name !== "string" || !item.name.trim() || item.name.length > 200 ||
+            !Number.isSafeInteger(item.qty) || item.qty < 1 || item.qty > 100000 ||
+            !Number.isFinite(item.price) || item.price < 0 || item.price > 100000000) {
+          return failure("The backup contains invalid open table order items.");
+        }
+        itemIds.add(item.id);
+      }
+      openOrdersById.set(order.id, order);
+      openOrderTables.add(order.table);
+      highestOpenOrderId = Math.max(highestOpenOrderId, order.id);
+    }
+    if (state.nextId <= Math.max(highestSaleId, highestOpenOrderId)) {
+      return failure("The next order number must be higher than existing sales and open orders.");
+    }
+    if (state.activeOpenOrderId !== undefined && state.activeOpenOrderId !== null) {
+      const activeOrder = openOrdersById.get(state.activeOpenOrderId);
+      if (!activeOrder || state.tableNo !== activeOrder.table ||
+          state.orderType !== "Dine in") {
+        return failure("The backup contains invalid active table order context.");
+      }
     }
 
     const ticketIds = new Set();
@@ -183,13 +224,21 @@
       }
     }
 
-    for (const [table, saleId] of Object.entries(state.tables)) {
+    for (const [table, orderId] of Object.entries(state.tables)) {
       const tableNumber = Number(table);
-      const sale = salesById.get(saleId);
+      const openOrder = openOrdersById.get(orderId);
+      const sale = salesById.get(orderId);
       if (!/^[1-9]\d*$/.test(table) || !Number.isSafeInteger(tableNumber) ||
-          tableNumber < 1 || tableNumber > 12 || !isPositiveSafeInteger(saleId) ||
-          !sale || sale.type !== "Dine in" || sale.table !== tableNumber) {
+          tableNumber < 1 || tableNumber > 12 || !isPositiveSafeInteger(orderId) ||
+          (openOrder
+            ? openOrder.table !== tableNumber
+            : (!sale || sale.type !== "Dine in" || sale.table !== tableNumber))) {
         return failure("The backup contains invalid table occupancy data.");
+      }
+    }
+    for (const order of openOrders) {
+      if (state.tables[String(order.table)] !== order.id) {
+        return failure("An open table order must own its table occupancy.");
       }
     }
 

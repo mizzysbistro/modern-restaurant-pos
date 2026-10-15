@@ -88,6 +88,9 @@ const checks = [
   ["Open cart and checkout context persist in native state and backups", scriptMatch[1].includes("openCart:serializeOpenCart()") && scriptMatch[1].includes("orderType,tableNo,payment,customer") && storage.includes("isValidOpenCart(root, products)") && backupSchema.includes("The backup contains an invalid open cart.")],
   ["Checkout clears the draft before saving and restores it after a failed write", scriptMatch[1].includes("cart.clear();if(!save()){") && scriptMatch[1].includes("cart=previous.cart;renderCart();")],
   ["Native/device tests cover draft recovery and invalid cart lines", unitTests.includes("openCartAndCheckoutContextPersistAcrossDatabaseReopen") && instrumentation.includes("openCartAndCheckoutContextPersistAcrossDatabaseReopen") && unitTests.includes("invalidOpenCartCannotReplacePreviouslySavedDraft") && instrumentation.includes("invalidOpenCartCannotReplacePreviouslySavedDraft") && backupTests.includes("rejects a saved cart line for a nonexistent menu item")],
+  ["Native SQLite validates persisted open table orders and table ownership", storage.includes("openOrdersById") && storage.includes("mappedTableOrder") && storage.includes("activeOpenOrderId")],
+  ["Backups validate open table orders, occupancy and active context", backupSchema.includes("invalid open table orders") && backupSchema.includes("An open table order must own its table occupancy") && backupTests.includes("accepts an open table order with matching occupancy and active context")],
+  ["JVM and device tests cover open-table persistence and table ownership failures", unitTests.includes("openTableOrderPersistsAndOwnsTableOccupancy") && instrumentation.includes("openTableOrderPersistsAndOwnsTableOccupancy") && unitTests.includes("rejectsOpenTableOrderThatDoesNotOwnItsTable") && instrumentation.includes("rejectsOpenTableOrderThatDoesNotOwnItsTable")],
 ];
 
 const failed = checks.filter(([, passed]) => !passed);

@@ -211,3 +211,51 @@ test("rejects invalid saved checkout context", () => {
   backup.state.tableNo = 13;
   assert.match(validateBackupDocument(backup).error, /invalid checkout context/);
 });
+
+
+function addOpenTableOrder(backup) {
+  backup.state.openOrders = [{
+    id: 1002,
+    table: 5,
+    createdAt: "2026-10-15T11:00:00.000Z",
+    updatedAt: "2026-10-15T11:05:00.000Z",
+    customer: "",
+    items: [{ id: 1, name: "Chicken Plate", price: 245, qty: 2 }]
+  }];
+  backup.state.tables["5"] = 1002;
+  backup.state.nextId = 1003;
+  backup.state.activeOpenOrderId = 1002;
+  backup.state.tableNo = 5;
+  backup.state.orderType = "Dine in";
+  backup.state.openCart = [{ id: 1, name: "Chicken Plate", price: 245, qty: 2 }];
+  return backup;
+}
+
+test("accepts an open table order with matching occupancy and active context", () => {
+  const result = validateBackupDocument(addOpenTableOrder(validBackup()));
+  assert.equal(result.ok, true);
+  assert.equal(result.state.openOrders[0].id, 1002);
+});
+
+test("rejects an open table order without matching table occupancy", () => {
+  const backup = addOpenTableOrder(validBackup());
+  delete backup.state.tables["5"];
+  assert.match(validateBackupDocument(backup).error, /open table order|table occupancy/);
+});
+
+test("rejects open orders with invalid items or duplicate order IDs", () => {
+  const backup = addOpenTableOrder(validBackup());
+  backup.state.openOrders[0].items[0].qty = 0;
+  assert.match(validateBackupDocument(backup).error, /invalid open table order items/);
+  const duplicate = addOpenTableOrder(validBackup());
+  duplicate.state.openOrders[0].id = 1001;
+  assert.match(validateBackupDocument(duplicate).error, /invalid open table orders/);
+});
+
+test("rejects active table context that points to a missing open order", () => {
+  const backup = validBackup();
+  backup.state.activeOpenOrderId = 9999;
+  backup.state.orderType = "Dine in";
+  backup.state.tableNo = 5;
+  assert.match(validateBackupDocument(backup).error, /invalid active table order context/);
+});
