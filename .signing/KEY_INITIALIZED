@@ -1,0 +1,1 @@
+This tracked marker prevents GitHub Actions from silently generating a different APK signing key. The matching keystore must be restored from the dedicated Actions cache or configured securely as an Actions secret. Never delete or replace the original signing key.

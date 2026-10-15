@@ -260,6 +260,39 @@ public final class PosStorageUnitTest {
         assertFalse(storage.saveState(root.toString()));
     }
 
+
+    @Test
+    public void savesAndReloadsMenuStockTicketsAndTableOccupancy() throws JSONException {
+        JSONObject root = new JSONObject(VALID_SNAPSHOT);
+        root.getJSONObject("stock").put("1", 7);
+        JSONObject tables = new JSONObject();
+        tables.put("4", 1001);
+        root.put("tables", tables);
+        JSONArray tickets = new JSONArray();
+        JSONObject ticket = new JSONObject();
+        ticket.put("id", 1001);
+        ticket.put("time", "2026-10-15T10:00:00.000Z");
+        ticket.put("type", "Dine in");
+        ticket.put("table", 4);
+        ticket.put("done", false);
+        ticket.put("items", new JSONArray().put(
+            new JSONObject().put("name", "Test dish").put("price", 100).put("qty", 1)
+        ));
+        tickets.put(ticket);
+        root.put("tickets", tickets);
+
+        assertTrue(storage.saveState(root.toString()));
+        storage.close();
+        storage = new PosStorage(context, TEST_DATABASE);
+
+        JSONObject restored = new JSONObject(storage.loadState());
+        assertEquals("Test dish", restored.getJSONArray("products").getJSONObject(0).getString("name"));
+        assertEquals(7, restored.getJSONObject("stock").getInt("1"));
+        assertEquals(1001, restored.getJSONObject("tables").getInt("4"));
+        assertEquals(false, restored.getJSONArray("tickets").getJSONObject(0).getBoolean("done"));
+        assertSaleIds(storage.loadState(), 1001L);
+    }
+
     @Test
     public void rejectsSnapshotsMissingRequiredCollections() {
         assertFalse(storage.saveState("{\"products\":[],\"sales\":[]}"));
