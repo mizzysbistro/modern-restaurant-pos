@@ -8,7 +8,7 @@ Last reviewed: 2026-10-16
 - [x] Confirm Java Android Activity with bundled HTML/CSS/JavaScript WebView UI.
 - [x] Confirm the native storage bridge and legacy localStorage import.
 - [x] Confirm GitHub Actions runs frontend safety checks, backup schema tests, SQLite JVM tests, Android test compilation, APK build, and APK signer verification.
-- [x] Establish and inspect a green baseline: [latest main APK build](https://github.com/mizzysbistro/modern-restaurant-pos/actions/runs/38800296338) and [latest feature validation](https://github.com/mizzysbistro/modern-restaurant-pos/actions/runs/38800346455).
+- [x] Establish and inspect green CI baselines: [main APK build with JavaScript regression tests](https://github.com/mizzysbistro/modern-restaurant-pos/actions/runs/38801784149), [latest pull-request validation](https://github.com/mizzysbistro/modern-restaurant-pos/actions/runs/38802277366), and [latest branch validation in progress](https://github.com/mizzysbistro/modern-restaurant-pos/actions/runs/38802270737).
 - [ ] Verify that the signing certificate on the APK installed on the physical tablet matches the update APK. Repository/CI checks cannot infer the installed app certificate.
 - [ ] Test backup and restore with real tablet/database data before live use.
 
@@ -54,8 +54,9 @@ Last reviewed: 2026-10-16
 - [ ] Add customer-facing display mode.
 
 ### Milestone 6 — Reporting
-- [ ] Add date-range and payment-method breakdowns calculated from persisted sales.
-- [ ] Verify reports against known test transactions, including date boundaries.
+- [x] Add date-range and payment-method breakdowns calculated from locally persisted sales, including payment-method totals and filtered/all-sales CSV exports.
+- [x] Add regression tests for inclusive date boundaries, payment totals, average order, invalid ranges, and empty days; the pull-request workflow passed all 27 Node tests.
+- [ ] Reconcile date-range reports against known transactions on the physical tablet and confirm day-boundary behavior under the device's configured time zone.
 
 ### Milestone 7 — Security and production hardening
 - [x] Add source-level checks for WebView bridge exposure/navigation, HTML escaping, input validation, and persistence error recovery.
