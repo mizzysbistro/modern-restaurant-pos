@@ -21,6 +21,10 @@ jobs:
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
       - name: Set up Java
         uses: actions/setup-java@v5
         with:
@@ -65,6 +69,8 @@ jobs:
           echo "/tmp/gradle-8.7/bin" >> "$GITHUB_PATH"
       - name: Verify POS frontend and data-safety rules
         run: node scripts/verify-pos.mjs
+      - name: Run POS JavaScript regression tests
+        run: node --test tests/*.test.cjs
       - name: Set increasing APK version
         run: |
           sed -i "s/versionCode 1/versionCode $GITHUB_RUN_NUMBER/" app/build.gradle

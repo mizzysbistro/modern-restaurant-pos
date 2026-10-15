@@ -6,6 +6,8 @@ const root = process.cwd();
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), "utf8");
 const html = read("app/src/main/assets/index.html");
 const backupSchema = read("app/src/main/assets/backup-schema.js");
+const reporting = read("app/src/main/assets/reporting.js");
+const reportingTests = read("tests/reporting.test.cjs");
 const activity = read("app/src/main/java/com/mizzysbistro/pos/MainActivity.java");
 const storage = read("app/src/main/java/com/mizzysbistro/pos/PosStorage.java");
 const gradle = read("app/build.gradle");
@@ -73,13 +75,16 @@ const checks = [
   ["Backup import limits file size", scriptMatch[1].includes("const MAX_BACKUP_BYTES=10*1024*1024") && scriptMatch[1].includes("file.size>MAX_BACKUP_BYTES")],
   ["User-controlled menu content is HTML-escaped", scriptMatch[1].includes("const esc=value=>") && scriptMatch[1].includes("esc(p.name)") && scriptMatch[1].includes("esc(p.cat)")],
   ["Kitchen ticket and receipt text is HTML-escaped", scriptMatch[1].includes("esc(x.name)") && scriptMatch[1].includes("esc(s.payment)")],
-  ["CSV export uses native Android file picker when available", scriptMatch[1].includes('exportTextFile("mizzy-bistro-sales.csv","text/csv",csv)')],
+  ["CSV export uses native Android file picker when available", scriptMatch[1].includes('window.PosFiles.exportTextFile(filename,"text/csv",csv)')],
   ["Backup schema validates table numbers", backupSchema.includes("sale.table > 12") && backupSchema.includes("ticket.table > 12")],
   ["Backup schema validates explicit kitchen ticket status", backupSchema.includes('typeof ticket.done !== "boolean"')],
   ["POS displays honest offline and local-only storage status", scriptMatch[1].includes("Offline mode · local save only") && scriptMatch[1].includes("cloud synchronization is not configured")],
   ["Table occupancy counts derive from saved table state", scriptMatch[1].includes("occupiedCount") && scriptMatch[1].includes("data-release-table")],
   ["Receipt printing uses Android PrintManager in the native app", activity.includes("PrintManager") && activity.includes("createPrintDocumentAdapter") && scriptMatch[1].includes("window.PosFiles.printReceipt(JSON.stringify(s))")],
-  ["Receipt HTML escapes names and payment details", activity.includes("escapeHtml(name)") && activity.includes("escapeHtml(payment)")]
+  ["Receipt HTML escapes names and payment details", activity.includes("escapeHtml(name)") && activity.includes("escapeHtml(payment)")],
+  ["Date-range report uses local inclusive date boundaries", reporting.includes("parseLocalDateKey") && reporting.includes("endExclusive.setDate(endExclusive.getDate() + 1)") && scriptMatch[1].includes("MizzyReports.summarizeSales(sales,startDate,endDate)")],
+  ["Reports expose payment-method totals and separate all-sales export", scriptMatch[1].includes("Payment breakdown") && scriptMatch[1].includes("exportSalesCsv(reportRows") && scriptMatch[1].includes("exportSalesCsv(sales")],
+  ["Reporting helper regression tests cover date boundaries, totals, and invalid ranges", reportingTests.includes("includes both boundary dates") && reportingTests.includes("groups payment totals") && reportingTests.includes("rejects invalid calendar dates")],
 ];
 
 const failed = checks.filter(([, passed]) => !passed);
