@@ -215,6 +215,11 @@ public final class PosStorage extends SQLiteOpenHelper {
             db = getWritableDatabase();
             db.beginTransaction();
 
+            if (!replaceSales &&
+                !stockAdjustmentHistoryPreserved(db, root.optJSONArray("stockAdjustments"))) {
+                return false;
+            }
+
             ContentValues stateValues = new ContentValues();
             stateValues.put("id", STATE_ROW_ID);
             stateValues.put("payload", baseState.toString());
@@ -377,6 +382,64 @@ public final class PosStorage extends SQLiteOpenHelper {
             TABLE_SALES, null, values, SQLiteDatabase.CONFLICT_REPLACE
         );
         return result != -1L;
+    }
+
+    /**
+     * During routine saves, prior stock audit entries must remain unchanged.
+     * At the 10,000-entry cap only an oldest prefix may roll off when newer
+     * entries are appended. Explicit backup restore is handled separately.
+     */
+    private boolean stockAdjustmentHistoryPreserved(SQLiteDatabase db, JSONArray incoming)
+        throws JSONException {
+        Cursor cursor = null;
+        try {
+            cursor = db.query(
+                TABLE_STATE, new String[]{"payload"}, "id = ?",
+                new String[]{String.valueOf(STATE_ROW_ID)}, null, null, null
+            );
+            if (!cursor.moveToFirst()) return true;
+            JSONObject oldRoot = new JSONObject(cursor.getString(0));
+            JSONArray previous = oldRoot.optJSONArray("stockAdjustments");
+            int oldLength = previous == null ? 0 : previous.length();
+            int newLength = incoming == null ? 0 : incoming.length();
+            if (oldLength == 0) return true;
+            if (incoming == null || newLength < oldLength && oldLength < 10000) return false;
+
+            long maxPriorId = 0;
+            for (int i = 0; i < oldLength; i++) {
+                JSONObject event = previous.optJSONObject(i);
+                if (event == null) return false;
+                maxPriorId = Math.max(maxPriorId, saleId(event));
+            }
+
+            for (int startIndex = 0; startIndex <= oldLength; startIndex++) {
+                if (startIndex > 0 && oldLength != 10000) continue;
+                int preserved = oldLength - startIndex;
+                if (newLength < preserved) continue;
+                if (startIndex > 0 && newLength != 10000) continue;
+                boolean matches = true;
+                for (int i = 0; i < preserved; i++) {
+                    if (!jsonValuesEqual(previous.opt(i + startIndex), incoming.opt(i))) {
+                        matches = false;
+                        break;
+                    }
+                }
+                if (!matches) continue;
+
+                long priorAddedId = maxPriorId;
+                for (int i = preserved; i < newLength; i++) {
+                    JSONObject event = incoming.optJSONObject(i);
+                    if (event == null) { matches = false; break; }
+                    long id = saleId(event);
+                    if (id <= priorAddedId) { matches = false; break; }
+                    priorAddedId = id;
+                }
+                if (matches && (startIndex == 0 || newLength > preserved)) return true;
+            }
+            return false;
+        } finally {
+            if (cursor != null) cursor.close();
+        }
     }
 
     /** Validate optional append-style stock adjustment history; absent is a legacy snapshot. */
