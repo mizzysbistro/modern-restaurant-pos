@@ -237,7 +237,7 @@
     const ticketIds = new Set();
     for (const ticket of state.tickets) {
       if (!ticket || typeof ticket !== "object" ||
-          !isPositiveSafeInteger(ticket.id) || ticketIds.has(ticket.id) ||
+          !isPositiveSafeInteger(ticket.id) || ticket.id >= state.nextId || ticketIds.has(ticket.id) ||
           !Array.isArray(ticket.items) || ticket.items.length > LIMITS.itemsPerTicket ||
           typeof ticket.time !== "string" || !isValidTimestamp(ticket.time) ||
           typeof ticket.done !== "boolean" ||

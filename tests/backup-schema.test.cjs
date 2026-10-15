@@ -311,3 +311,10 @@ test("rejects open table orders with timestamps that native storage would reject
   backup.state.openOrders[0].createdAt = "2026-10-15";
   assert.match(validateBackupDocument(backup).error, /invalid open table orders/);
 });
+
+
+test("rejects a kitchen ticket ID that could be reused by the next order", () => {
+  const backup = validBackup();
+  backup.state.tickets[0].id = backup.state.nextId;
+  assert.match(validateBackupDocument(backup).error, /invalid kitchen ticket/);
+});

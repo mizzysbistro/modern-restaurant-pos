@@ -471,7 +471,7 @@ public final class PosStorage extends SQLiteOpenHelper {
     }
 
     /** Validate kitchen-ticket records before they enter durable state. */
-    private boolean isValidKitchenTickets(JSONArray tickets) {
+    private boolean isValidKitchenTickets(JSONArray tickets, long nextIdLong) {
         if (tickets == null || tickets.length() > 10000) return false;
         Set<Long> seenIds = new HashSet<>();
         for (int i = 0; i < tickets.length(); i++) {
@@ -488,7 +488,8 @@ public final class PosStorage extends SQLiteOpenHelper {
                 !("Dine in".equals(type) || "Takeaway".equals(type))) return false;
             double idValue = ((Number) rawId).doubleValue();
             if (!Double.isFinite(idValue) || idValue < 1 ||
-                idValue != Math.rint(idValue) || idValue > 9007199254740991d) return false;
+                idValue != Math.rint(idValue) || idValue >= nextIdLong ||
+                idValue > 9007199254740991d) return false;
             long id = (long) idValue;
             if (!seenIds.add(id)) return false;
             if ("Dine in".equals(type)) {
@@ -654,14 +655,14 @@ public final class PosStorage extends SQLiteOpenHelper {
                 stock == null || tables == null || !(nextId instanceof Number)) {
                 return false;
             }
-            if (!isValidStockAdjustments(root) || !isValidOpenCart(root, products) ||
-                !isValidKitchenTickets(tickets)) return false;
+            if (!isValidStockAdjustments(root) || !isValidOpenCart(root, products)) return false;
             double nextIdValue = ((Number) nextId).doubleValue();
             if (!Double.isFinite(nextIdValue) || nextIdValue < 1 ||
                 nextIdValue != Math.rint(nextIdValue) || nextIdValue > Long.MAX_VALUE) {
                 return false;
             }
             long nextIdLong = (long) nextIdValue;
+            if (!isValidKitchenTickets(tickets, nextIdLong)) return false;
             Set<Long> seenSaleIds = new HashSet<>();
             java.util.Map<Long, JSONObject> salesById = new java.util.HashMap<>();
             for (int i = 0; i < sales.length(); i++) {

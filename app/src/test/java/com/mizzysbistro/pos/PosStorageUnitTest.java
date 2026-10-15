@@ -180,7 +180,7 @@ public final class PosStorageUnitTest {
     @Test
     public void rejectsMalformedKitchenTicketsWithoutOverwritingSavedSales() throws JSONException {
         assertTrue(storage.saveState(VALID_SNAPSHOT));
-        for (int variant = 0; variant < 5; variant++) {
+        for (int variant = 0; variant < 6; variant++) {
             JSONObject root = new JSONObject(VALID_SNAPSHOT);
             JSONObject ticket = new JSONObject();
             ticket.put("id", 1001);
@@ -197,6 +197,7 @@ public final class PosStorageUnitTest {
             if (variant == 2) ticket.put("table", 13);
             if (variant == 3) item.put("qty", 0);
             if (variant == 4) tickets.put(new JSONObject(ticket.toString()));
+            if (variant == 5) ticket.put("id", 1002);
             root.put("tickets", tickets);
             assertFalse("Invalid kitchen ticket variant " + variant,
                 storage.saveState(root.toString()));
