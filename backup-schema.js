@@ -42,6 +42,28 @@
       return failure("The backup is missing required POS data.");
     }
 
+    if (state.stockAdjustments !== undefined) {
+      if (!Array.isArray(state.stockAdjustments) || state.stockAdjustments.length > 10000) {
+        return failure("The backup contains invalid stock adjustment history.");
+      }
+      const adjustmentIds = new Set();
+      for (const adjustment of state.stockAdjustments) {
+        if (!adjustment || typeof adjustment !== "object" ||
+            !isPositiveSafeInteger(adjustment.id) || adjustmentIds.has(adjustment.id) ||
+            !isPositiveSafeInteger(adjustment.productId) ||
+            typeof adjustment.time !== "string" || !Number.isFinite(Date.parse(adjustment.time)) ||
+            typeof adjustment.productName !== "string" || !adjustment.productName.trim() || adjustment.productName.length > 200 ||
+            !Number.isSafeInteger(adjustment.from) || adjustment.from < 0 || adjustment.from > 100000000 ||
+            !Number.isSafeInteger(adjustment.to) || adjustment.to < 0 || adjustment.to > 100000000 ||
+            !Number.isSafeInteger(adjustment.delta) || adjustment.delta !== adjustment.to - adjustment.from ||
+            typeof adjustment.reason !== "string" || !adjustment.reason.trim() || adjustment.reason.length > 160 ||
+            (adjustment.source !== "Manual" && adjustment.source !== "Sale")) {
+          return failure("The backup contains invalid stock adjustment history.");
+        }
+        adjustmentIds.add(adjustment.id);
+      }
+    }
+
     if (state.products.length > LIMITS.products ||
         state.sales.length > LIMITS.sales ||
         state.tickets.length > LIMITS.tickets) {
@@ -62,6 +84,36 @@
       productIds.add(product.id);
     }
 
+    if (state.openCart !== undefined) {
+      if (!Array.isArray(state.openCart) || state.openCart.length > 500) {
+        return failure("The backup contains an invalid open cart.");
+      }
+      const openCartIds = new Set();
+      for (const line of state.openCart) {
+        if (!line || typeof line !== "object" ||
+            !isPositiveSafeInteger(line.id) || !productIds.has(line.id) ||
+            openCartIds.has(line.id) || !Number.isSafeInteger(line.qty) ||
+            line.qty < 1 || line.qty > 100000 ||
+            (line.name !== undefined && (typeof line.name !== "string" || !line.name.trim() || line.name.length > 200)) ||
+            (line.price !== undefined && (!Number.isFinite(line.price) || line.price < 0 || line.price > 100000000))) {
+          return failure("The backup contains an invalid open cart.");
+        }
+        openCartIds.add(line.id);
+      }
+    }
+    if (state.orderType !== undefined && state.orderType !== "Dine in" && state.orderType !== "Takeaway") {
+      return failure("The backup contains invalid checkout context.");
+    }
+    if (state.tableNo !== undefined && (!Number.isSafeInteger(state.tableNo) || state.tableNo < 1 || state.tableNo > 12)) {
+      return failure("The backup contains invalid checkout context.");
+    }
+    if (state.payment !== undefined && (typeof state.payment !== "string" || !state.payment.trim() || state.payment.length > 80)) {
+      return failure("The backup contains invalid checkout context.");
+    }
+    if (state.customer !== undefined && (typeof state.customer !== "string" || state.customer.length > 200)) {
+      return failure("The backup contains invalid checkout context.");
+    }
+
     for (const [id, quantity] of Object.entries(state.stock)) {
       if (!/^\d+$/.test(id) || !isPositiveSafeInteger(Number(id)) ||
           !Number.isSafeInteger(quantity) || quantity < 0 ||
@@ -71,12 +123,13 @@
     }
 
     const saleIds = new Set();
+    const salesById = new Map();
     let highestSaleId = 0;
     for (const sale of state.sales) {
       if (!sale || typeof sale !== "object" ||
           !isPositiveSafeInteger(sale.id) || saleIds.has(sale.id) ||
           typeof sale.time !== "string" || !Number.isFinite(Date.parse(sale.time)) ||
-          !Array.isArray(sale.items) || sale.items.length > LIMITS.itemsPerSale ||
+          !Array.isArray(sale.items) || sale.items.length < 1 || sale.items.length > LIMITS.itemsPerSale ||
           !Number.isFinite(sale.total) || sale.total < 0 ||
           sale.total > 1000000000 || typeof sale.payment !== "string" ||
           sale.payment.length > 80 ||
@@ -86,7 +139,9 @@
         return failure("The backup contains an invalid sale record.");
       }
       saleIds.add(sale.id);
+      salesById.set(sale.id, sale);
       highestSaleId = Math.max(highestSaleId, sale.id);
+      let itemsTotal = 0;
       for (const item of sale.items) {
         if (!item || typeof item !== "object" ||
             typeof item.name !== "string" || !item.name.trim() ||
@@ -96,10 +151,67 @@
             item.price > 100000000) {
           return failure("The backup contains invalid sale items.");
         }
+        itemsTotal += item.price * item.qty;
+        if (!Number.isFinite(itemsTotal) || itemsTotal > 1000000000) {
+          return failure("The backup contains invalid sale totals.");
+        }
+      }
+      if (Math.round(itemsTotal * 100) !== Math.round(sale.total * 100)) {
+        return failure("The backup sale total does not match its items.");
       }
     }
-    if (state.nextId <= highestSaleId) {
-      return failure("The next order number must be higher than existing sales.");
+    const adjustmentEvents=state.saleAdjustments===undefined?[]:state.saleAdjustments;
+    if(!Array.isArray(adjustmentEvents)||adjustmentEvents.length>10000)return failure("The backup contains invalid sale adjustment history.");
+    const eventIds=new Set(),adjustmentState=new Map();let previousEventId=0;
+    for(const event of adjustmentEvents){
+      if(!event||typeof event!=="object"||!isPositiveSafeInteger(event.id)||event.id<=previousEventId||eventIds.has(event.id)||!isPositiveSafeInteger(event.saleId)||!salesById.has(event.saleId)||typeof event.time!=="string"||!Number.isFinite(Date.parse(event.time))||(event.action!=="VOID"&&event.action!=="REFUND")||!Number.isSafeInteger(event.amountCents)||event.amountCents<0||typeof event.reason!=="string"||!event.reason.trim()||event.reason.length>160||typeof event.staff!=="string"||!event.staff.trim()||event.staff.length>80)return failure("The backup contains invalid sale adjustment history.");
+      previousEventId=event.id;eventIds.add(event.id);const sale=salesById.get(event.saleId),totalCents=Math.round(sale.total*100);if(event.amountCents>totalCents||(event.action==="REFUND"&&event.amountCents<1))return failure("The backup contains invalid sale adjustment history.");
+      const state=adjustmentState.get(event.saleId)||{action:event.action,amount:0,count:0};if(state.action!==event.action)return failure("The backup contains mixed void/refund history for one sale.");
+      if(event.action==="VOID"){if(state.count>0||event.amountCents!==totalCents)return failure("The backup contains invalid sale adjustment history.");state.amount=totalCents}else{if(state.amount+event.amountCents>totalCents)return failure("The backup contains refund history beyond the sale total.");state.amount+=event.amountCents}state.count++;adjustmentState.set(event.saleId,state)
+    }
+    const openOrdersById = new Map();
+    const openOrderTables = new Set();
+    const openOrders = state.openOrders === undefined ? [] : state.openOrders;
+    if (!Array.isArray(openOrders) || openOrders.length > 12) {
+      return failure("The backup contains invalid open table orders.");
+    }
+    let highestOpenOrderId = 0;
+    for (const order of openOrders) {
+      if (!order || typeof order !== "object" ||
+          !isPositiveSafeInteger(order.id) || saleIds.has(order.id) ||
+          openOrdersById.has(order.id) || order.id >= state.nextId ||
+          !Number.isSafeInteger(order.table) || order.table < 1 || order.table > 12 ||
+          openOrderTables.has(order.table) ||
+          typeof order.createdAt !== "string" || !Number.isFinite(Date.parse(order.createdAt)) ||
+          (order.updatedAt !== undefined && (typeof order.updatedAt !== "string" || !Number.isFinite(Date.parse(order.updatedAt)))) ||
+          (order.customer !== undefined && (typeof order.customer !== "string" || order.customer.length > 200)) ||
+          !Array.isArray(order.items) || order.items.length < 1 || order.items.length > LIMITS.itemsPerSale) {
+        return failure("The backup contains invalid open table orders.");
+      }
+      const itemIds = new Set();
+      for (const item of order.items) {
+        if (!item || typeof item !== "object" ||
+            !isPositiveSafeInteger(item.id) || !productIds.has(item.id) || itemIds.has(item.id) ||
+            typeof item.name !== "string" || !item.name.trim() || item.name.length > 200 ||
+            !Number.isSafeInteger(item.qty) || item.qty < 1 || item.qty > 100000 ||
+            !Number.isFinite(item.price) || item.price < 0 || item.price > 100000000) {
+          return failure("The backup contains invalid open table order items.");
+        }
+        itemIds.add(item.id);
+      }
+      openOrdersById.set(order.id, order);
+      openOrderTables.add(order.table);
+      highestOpenOrderId = Math.max(highestOpenOrderId, order.id);
+    }
+    if (state.nextId <= Math.max(highestSaleId, highestOpenOrderId)) {
+      return failure("The next order number must be higher than existing sales and open orders.");
+    }
+    if (state.activeOpenOrderId !== undefined && state.activeOpenOrderId !== null) {
+      const activeOrder = openOrdersById.get(state.activeOpenOrderId);
+      if (!activeOrder || state.tableNo !== activeOrder.table ||
+          state.orderType !== "Dine in") {
+        return failure("The backup contains invalid active table order context.");
+      }
     }
 
     const ticketIds = new Set();
@@ -123,10 +235,21 @@
       }
     }
 
-    for (const [table, saleId] of Object.entries(state.tables)) {
-      if (!/^\d+$/.test(table) || Number(table) < 1 ||
-          !isPositiveSafeInteger(saleId)) {
+    for (const [table, orderId] of Object.entries(state.tables)) {
+      const tableNumber = Number(table);
+      const openOrder = openOrdersById.get(orderId);
+      const sale = salesById.get(orderId);
+      if (!/^[1-9]\d*$/.test(table) || !Number.isSafeInteger(tableNumber) ||
+          tableNumber < 1 || tableNumber > 12 || !isPositiveSafeInteger(orderId) ||
+          (openOrder
+            ? openOrder.table !== tableNumber
+            : (!sale || sale.type !== "Dine in" || sale.table !== tableNumber))) {
         return failure("The backup contains invalid table occupancy data.");
+      }
+    }
+    for (const order of openOrders) {
+      if (state.tables[String(order.table)] !== order.id) {
+        return failure("An open table order must own its table occupancy.");
       }
     }
 
