@@ -24,6 +24,26 @@
     return Number.isSafeInteger(value) && value > 0;
   }
 
+  // Match the ISO-style date-times emitted by the app and accepted by native
+  // SQLite validation. Fail closed instead of letting Date.parse normalize
+  // impossible dates or accept date-only strings.
+  function isValidTimestamp(value) {
+    if (typeof value !== "string" || value.length > 100) return false;
+    const match = /^(\\d{4})-(\\d{2})-(\\d{2})T(\\d{2}):(\\d{2}):(\\d{2})(?:\\.(\\d{3}))?(Z|[+-](\\d{2}):(\\d{2}))?$/.exec(value);
+    if (!match) return false;
+    const year = Number(match[1]), month = Number(match[2]), day = Number(match[3]);
+    const hour = Number(match[4]), minute = Number(match[5]), second = Number(match[6]);
+    if (hour > 23 || minute > 59 || second > 59) return false;
+    const calendar = new Date(0);
+    calendar.setUTCFullYear(year, month - 1, day);
+    calendar.setUTCHours(hour, minute, second, 0);
+    if (calendar.getUTCFullYear() !== year || calendar.getUTCMonth() !== month - 1 ||
+        calendar.getUTCDate() !== day || calendar.getUTCHours() !== hour ||
+        calendar.getUTCMinutes() !== minute || calendar.getUTCSeconds() !== second) return false;
+    if (match[8] && (Number(match[9]) > 23 || Number(match[10]) > 59)) return false;
+    return Number.isFinite(Date.parse(value));
+  }
+
   function validateBackupDocument(doc) {
     if (!doc || typeof doc !== "object" || Array.isArray(doc) ||
         doc.format !== FORMAT || doc.schemaVersion !== SCHEMA_VERSION ||
@@ -51,7 +71,7 @@
         if (!adjustment || typeof adjustment !== "object" ||
             !isPositiveSafeInteger(adjustment.id) || adjustmentIds.has(adjustment.id) ||
             !isPositiveSafeInteger(adjustment.productId) ||
-            typeof adjustment.time !== "string" || !Number.isFinite(Date.parse(adjustment.time)) ||
+            typeof adjustment.time !== "string" || !isValidTimestamp(adjustment.time) ||
             typeof adjustment.productName !== "string" || !adjustment.productName.trim() || adjustment.productName.length > 200 ||
             !Number.isSafeInteger(adjustment.from) || adjustment.from < 0 || adjustment.from > 100000000 ||
             !Number.isSafeInteger(adjustment.to) || adjustment.to < 0 || adjustment.to > 100000000 ||
@@ -128,7 +148,7 @@
     for (const sale of state.sales) {
       if (!sale || typeof sale !== "object" ||
           !isPositiveSafeInteger(sale.id) || saleIds.has(sale.id) ||
-          typeof sale.time !== "string" || !Number.isFinite(Date.parse(sale.time)) ||
+          typeof sale.time !== "string" || !isValidTimestamp(sale.time) ||
           !Array.isArray(sale.items) || sale.items.length < 1 || sale.items.length > LIMITS.itemsPerSale ||
           !Number.isFinite(sale.total) || sale.total < 0 ||
           sale.total > 1000000000 || typeof sale.payment !== "string" ||
@@ -164,7 +184,7 @@
     if(!Array.isArray(adjustmentEvents)||adjustmentEvents.length>10000)return failure("The backup contains invalid sale adjustment history.");
     const eventIds=new Set(),adjustmentState=new Map();let previousEventId=0;
     for(const event of adjustmentEvents){
-      if(!event||typeof event!=="object"||!isPositiveSafeInteger(event.id)||event.id<=previousEventId||eventIds.has(event.id)||!isPositiveSafeInteger(event.saleId)||!salesById.has(event.saleId)||typeof event.time!=="string"||!Number.isFinite(Date.parse(event.time))||(event.action!=="VOID"&&event.action!=="REFUND")||!Number.isSafeInteger(event.amountCents)||event.amountCents<0||typeof event.reason!=="string"||!event.reason.trim()||event.reason.length>160||typeof event.staff!=="string"||!event.staff.trim()||event.staff.length>80)return failure("The backup contains invalid sale adjustment history.");
+      if(!event||typeof event!=="object"||!isPositiveSafeInteger(event.id)||event.id<=previousEventId||eventIds.has(event.id)||!isPositiveSafeInteger(event.saleId)||!salesById.has(event.saleId)||typeof event.time!=="string"||!isValidTimestamp(event.time)||(event.action!=="VOID"&&event.action!=="REFUND")||!Number.isSafeInteger(event.amountCents)||event.amountCents<0||typeof event.reason!=="string"||!event.reason.trim()||event.reason.length>160||typeof event.staff!=="string"||!event.staff.trim()||event.staff.length>80)return failure("The backup contains invalid sale adjustment history.");
       previousEventId=event.id;eventIds.add(event.id);const sale=salesById.get(event.saleId),totalCents=Math.round(sale.total*100);if(event.amountCents>totalCents||(event.action==="REFUND"&&event.amountCents<1))return failure("The backup contains invalid sale adjustment history.");
       const state=adjustmentState.get(event.saleId)||{action:event.action,amount:0,count:0};if(state.action!==event.action)return failure("The backup contains mixed void/refund history for one sale.");
       if(event.action==="VOID"){if(state.count>0||event.amountCents!==totalCents)return failure("The backup contains invalid sale adjustment history.");state.amount=totalCents}else{if(state.amount+event.amountCents>totalCents)return failure("The backup contains refund history beyond the sale total.");state.amount+=event.amountCents}state.count++;adjustmentState.set(event.saleId,state)
@@ -182,8 +202,8 @@
           openOrdersById.has(order.id) || order.id >= state.nextId ||
           !Number.isSafeInteger(order.table) || order.table < 1 || order.table > 12 ||
           openOrderTables.has(order.table) ||
-          typeof order.createdAt !== "string" || !Number.isFinite(Date.parse(order.createdAt)) ||
-          (order.updatedAt !== undefined && (typeof order.updatedAt !== "string" || !Number.isFinite(Date.parse(order.updatedAt)))) ||
+          typeof order.createdAt !== "string" || !isValidTimestamp(order.createdAt) ||
+          (order.updatedAt !== undefined && (typeof order.updatedAt !== "string" || !isValidTimestamp(order.updatedAt))) ||
           (order.customer !== undefined && (typeof order.customer !== "string" || order.customer.length > 200)) ||
           !Array.isArray(order.items) || order.items.length < 1 || order.items.length > LIMITS.itemsPerSale) {
         return failure("The backup contains invalid open table orders.");
@@ -219,7 +239,7 @@
       if (!ticket || typeof ticket !== "object" ||
           !isPositiveSafeInteger(ticket.id) || ticketIds.has(ticket.id) ||
           !Array.isArray(ticket.items) || ticket.items.length > LIMITS.itemsPerTicket ||
-          typeof ticket.time !== "string" || !Number.isFinite(Date.parse(ticket.time)) ||
+          typeof ticket.time !== "string" || !isValidTimestamp(ticket.time) ||
           typeof ticket.done !== "boolean" ||
           (ticket.type !== "Dine in" && ticket.type !== "Takeaway") ||
           (ticket.type === "Dine in" && (!Number.isSafeInteger(ticket.table) || ticket.table < 1 || ticket.table > 12)) ||

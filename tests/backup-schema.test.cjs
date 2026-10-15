@@ -275,3 +275,39 @@ test("accepts legacy draft cart lines without name and price snapshots", () => {
   backup.state.openCart = [{ id: 1, qty: 2 }];
   assert.equal(validateBackupDocument(backup).ok, true);
 });
+
+
+test("rejects sale timestamps that native storage cannot parse", () => {
+  const dateOnly = validBackup();
+  dateOnly.state.sales[0].time = "2026-10-15";
+  assert.match(validateBackupDocument(dateOnly).error, /invalid sale record/);
+
+  const impossibleDate = validBackup();
+  impossibleDate.state.sales[0].time = "2026-02-30T10:00:00.000Z";
+  assert.match(validateBackupDocument(impossibleDate).error, /invalid sale record/);
+});
+
+test("rejects invalid kitchen ticket timestamps", () => {
+  const backup = validBackup();
+  backup.state.tickets[0].time = "2026-10-15";
+  assert.match(validateBackupDocument(backup).error, /invalid kitchen ticket/);
+});
+
+test("rejects invalid stock and sale adjustment timestamps", () => {
+  const stockBackup = validBackup();
+  stockBackup.state.stockAdjustments[0].time = "2026-10-15";
+  assert.match(validateBackupDocument(stockBackup).error, /invalid stock adjustment history/);
+
+  const saleBackup = validBackup();
+  saleBackup.state.saleAdjustments = [{
+    id: 1, time: "not-a-date", saleId: 1001, action: "REFUND",
+    amountCents: 1000, reason: "Correction", staff: "Mizzy"
+  }];
+  assert.match(validateBackupDocument(saleBackup).error, /sale adjustment history/);
+});
+
+test("rejects open table orders with timestamps that native storage would reject", () => {
+  const backup = addOpenTableOrder(validBackup());
+  backup.state.openOrders[0].createdAt = "2026-10-15";
+  assert.match(validateBackupDocument(backup).error, /invalid open table orders/);
+});
