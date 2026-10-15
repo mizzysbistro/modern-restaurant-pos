@@ -67,15 +67,8 @@ jobs:
         run: |
           sed -i "s/versionCode 1/versionCode $GITHUB_RUN_NUMBER/" app/build.gradle
           sed -i "s/versionName '1.0.0'/versionName '1.0.$GITHUB_RUN_NUMBER'/" app/build.gradle
-      - name: Run SQLite instrumentation tests
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: 30
-          target: default
-          arch: x86_64
-          emulator-options: -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -no-snapshot
-          disable-animations: true
-          script: gradle --no-daemon connectedDebugAndroidTest
+      - name: Run SQLite JVM tests and compile device tests
+        run: gradle --no-daemon testDebugUnitTest assembleDebugAndroidTest
       - name: Build debug APK
         run: gradle --no-daemon assembleDebug
       - name: Verify APK signature matches persistent key
