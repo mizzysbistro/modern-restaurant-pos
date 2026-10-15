@@ -294,6 +294,42 @@ public final class PosStorageUnitTest {
     }
 
     @Test
+    public void openCartAndCheckoutContextPersistAcrossDatabaseReopen() throws JSONException {
+        JSONObject root = new JSONObject(VALID_SNAPSHOT);
+        JSONArray openCart = new JSONArray();
+        openCart.put(new JSONObject().put("id", 1).put("qty", 2));
+        root.put("openCart", openCart);
+        root.put("orderType", "Dine in");
+        root.put("tableNo", 4);
+        root.put("payment", "GCash");
+        root.put("customer", "Walk-in");
+        assertTrue(storage.saveState(root.toString()));
+
+        storage.close();
+        storage = new PosStorage(context, TEST_DATABASE);
+        JSONObject restored = new JSONObject(storage.loadState());
+        assertEquals(2, restored.getJSONArray("openCart").getJSONObject(0).getInt("qty"));
+        assertEquals("Dine in", restored.getString("orderType"));
+        assertEquals(4, restored.getInt("tableNo"));
+        assertEquals("GCash", restored.getString("payment"));
+        assertEquals("Walk-in", restored.getString("customer"));
+        assertSaleIds(storage.loadState(), 1001L);
+    }
+
+    @Test
+    public void invalidOpenCartCannotReplacePreviouslySavedDraft() throws JSONException {
+        JSONObject root = new JSONObject(VALID_SNAPSHOT);
+        root.put("openCart", new JSONArray().put(new JSONObject().put("id", 1).put("qty", 2)));
+        assertTrue(storage.saveState(root.toString()));
+
+        root.put("openCart", new JSONArray().put(new JSONObject().put("id", 9999).put("qty", 1)));
+        assertFalse(storage.saveState(root.toString()));
+        JSONObject restored = new JSONObject(storage.loadState());
+        assertEquals(1, restored.getJSONArray("openCart").length());
+        assertEquals(1, restored.getJSONArray("openCart").getJSONObject(0).getInt("id"));
+    }
+
+    @Test
     public void rejectsSnapshotsMissingRequiredCollections() {
         assertFalse(storage.saveState("{\"products\":[],\"sales\":[]}"));
         assertEquals("", storage.loadState());

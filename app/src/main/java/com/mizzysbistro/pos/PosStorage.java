@@ -486,6 +486,53 @@ public final class PosStorage extends SQLiteOpenHelper {
         return true;
     }
 
+    /** Validate an optional crash-recoverable cart and checkout selection. */
+    private boolean isValidOpenCart(JSONObject root, JSONArray products) {
+        if (root.has("orderType")) {
+            Object raw = root.opt("orderType");
+            if (!(raw instanceof String) ||
+                !("Dine in".equals(raw) || "Takeaway".equals(raw))) return false;
+        }
+        if (root.has("tableNo")) {
+            Object raw = root.opt("tableNo");
+            if (!(raw instanceof Number)) return false;
+            double value = ((Number) raw).doubleValue();
+            if (!Double.isFinite(value) || value != Math.rint(value) || value < 1 || value > 12) return false;
+        }
+        if (root.has("payment")) {
+            Object raw = root.opt("payment");
+            if (!(raw instanceof String) || ((String) raw).trim().isEmpty() || ((String) raw).length() > 80) return false;
+        }
+        if (root.has("customer")) {
+            Object raw = root.opt("customer");
+            if (!(raw instanceof String) || ((String) raw).length() > 200) return false;
+        }
+        if (!root.has("openCart")) return true;
+        JSONArray openCart = root.optJSONArray("openCart");
+        if (openCart == null || openCart.length() > 500) return false;
+
+        Set<Long> validProductIds = new HashSet<>();
+        for (int i = 0; i < products.length(); i++) {
+            JSONObject product = products.optJSONObject(i);
+            if (product == null) return false;
+            long id = saleId(product);
+            if (id < 1 || !validProductIds.add(id)) return false;
+        }
+        Set<Long> seenCartProductIds = new HashSet<>();
+        for (int i = 0; i < openCart.length(); i++) {
+            JSONObject line = openCart.optJSONObject(i);
+            if (line == null) return false;
+            long productId = saleId(line);
+            Object rawQuantity = line.opt("qty");
+            if (productId < 1 || !validProductIds.contains(productId) ||
+                !seenCartProductIds.add(productId) || !(rawQuantity instanceof Number)) return false;
+            double quantity = ((Number) rawQuantity).doubleValue();
+            if (!Double.isFinite(quantity) || quantity != Math.rint(quantity) ||
+                quantity < 1 || quantity > 100000) return false;
+        }
+        return true;
+    }
+
     private boolean isValidSnapshot(String payload) {
         if (payload == null || payload.isEmpty() || payload.length() > MAX_STATE_CHARS) {
             return false;
@@ -502,7 +549,7 @@ public final class PosStorage extends SQLiteOpenHelper {
                 stock == null || tables == null || !(nextId instanceof Number)) {
                 return false;
             }
-            if (!isValidStockAdjustments(root)) return false;
+            if (!isValidStockAdjustments(root) || !isValidOpenCart(root, products)) return false;
             double nextIdValue = ((Number) nextId).doubleValue();
             if (!Double.isFinite(nextIdValue) || nextIdValue < 1 ||
                 nextIdValue != Math.rint(nextIdValue) || nextIdValue > Long.MAX_VALUE) {
