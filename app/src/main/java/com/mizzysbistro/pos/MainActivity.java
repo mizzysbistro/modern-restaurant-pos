@@ -2,6 +2,15 @@ package com.mizzysbistro.pos;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.app.Presentation;
+import android.hardware.display.DisplayManager;
+import android.view.Display;
+import android.graphics.Color;
+import android.view.Gravity;
+import android.util.TypedValue;
+import android.widget.LinearLayout;
+import android.widget.ScrollView;
+import android.widget.TextView;
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.content.Context;
@@ -54,6 +63,17 @@ public class MainActivity extends Activity {
     private ValueCallback<Uri[]> fileChooserCallback;
     private final List<WebView> activePrintViews = new ArrayList<>();
     private boolean activityDestroyed;
+    private DisplayManager displayManager;
+    private CustomerDisplayPresentation customerDisplayPresentation;
+    private volatile boolean customerDisplayEnabled;
+    private CustomerDisplayState customerDisplayState;
+    private int customerDisplayId = -1;
+
+    private final DisplayManager.DisplayListener customerDisplayListener = new DisplayManager.DisplayListener() {
+        @Override public void onDisplayAdded(int displayId) { runOnUiThread(MainActivity.this::syncCustomerPresentation); }
+        @Override public void onDisplayRemoved(int displayId) { runOnUiThread(MainActivity.this::syncCustomerPresentation); }
+        @Override public void onDisplayChanged(int displayId) { runOnUiThread(MainActivity.this::syncCustomerPresentation); }
+    };
 
     private boolean isTrustedAsset(String url) {
         return url != null && url.startsWith("file:///android_asset/");
@@ -317,6 +337,155 @@ public class MainActivity extends Activity {
             }
             runOnUiThread(() -> beginTextExport(filename, mimeType, content));
         }
+
+        @JavascriptInterface
+        public boolean hasCustomerDisplay() {
+            return findCustomerDisplay() != null;
+        }
+
+        @JavascriptInterface
+        public boolean setCustomerDisplayEnabled(boolean enabled, String stateJson) {
+            CustomerDisplayState parsed = enabled ? CustomerDisplayState.parse(stateJson) : null;
+            if (enabled && (parsed == null || findCustomerDisplay() == null)) return false;
+            runOnUiThread(() -> {
+                customerDisplayEnabled = enabled;
+                if (enabled) customerDisplayState = parsed;
+                syncCustomerPresentation();
+            });
+            return true;
+        }
+
+        @JavascriptInterface
+        public void updateCustomerDisplay(String stateJson) {
+            CustomerDisplayState parsed = CustomerDisplayState.parse(stateJson);
+            if (parsed == null) return;
+            runOnUiThread(() -> {
+                customerDisplayState = parsed;
+                if (customerDisplayEnabled) syncCustomerPresentation();
+            });
+        }
+    }
+
+    private Display findCustomerDisplay() {
+        if (displayManager == null) return null;
+        Display[] displays = displayManager.getDisplays(DisplayManager.DISPLAY_CATEGORY_PRESENTATION);
+        return displays.length == 0 ? null : displays[0];
+    }
+
+    private void syncCustomerPresentation() {
+        if (!customerDisplayEnabled || customerDisplayState == null || findCustomerDisplay() == null) {
+            dismissCustomerPresentation();
+            return;
+        }
+        Display display = findCustomerDisplay();
+        if (customerDisplayPresentation == null || customerDisplayId != display.getDisplayId()) {
+            dismissCustomerPresentation();
+            try {
+                customerDisplayPresentation = new CustomerDisplayPresentation(this, display);
+                customerDisplayId = display.getDisplayId();
+                customerDisplayPresentation.show();
+            } catch (RuntimeException error) {
+                dismissCustomerPresentation();
+                Toast.makeText(this, "Could not open the secondary customer display.", Toast.LENGTH_LONG).show();
+                return;
+            }
+        }
+        customerDisplayPresentation.render(customerDisplayState);
+    }
+
+    private void dismissCustomerPresentation() {
+        if (customerDisplayPresentation != null) {
+            try { customerDisplayPresentation.dismiss(); } catch (RuntimeException ignored) { }
+        }
+        customerDisplayPresentation = null;
+        customerDisplayId = -1;
+    }
+
+    private int displayDp(float value) {
+        return Math.round(value * getResources().getDisplayMetrics().density);
+    }
+
+    private final class CustomerDisplayPresentation extends Presentation {
+        private LinearLayout root;
+        private LinearLayout itemList;
+        private TextView heading;
+        private TextView location;
+        private TextView customer;
+        private TextView message;
+        private TextView total;
+
+        CustomerDisplayPresentation(Context context, Display display) {
+            super(context, display);
+        }
+
+        private TextView label(String text, float size, int color, boolean bold) {
+            TextView view = new TextView(getContext());
+            view.setText(text);
+            view.setTextSize(TypedValue.COMPLEX_UNIT_SP, size);
+            view.setTextColor(color);
+            if (bold) view.setTypeface(null, android.graphics.Typeface.BOLD);
+            view.setPadding(0, displayDp(6), 0, displayDp(6));
+            return view;
+        }
+
+        @Override
+        protected void onCreate(Bundle savedInstanceState) {
+            super.onCreate(savedInstanceState);
+            root = new LinearLayout(getContext());
+            root.setOrientation(LinearLayout.VERTICAL);
+            root.setGravity(Gravity.CENTER_HORIZONTAL);
+            root.setPadding(displayDp(30), displayDp(24), displayDp(30), displayDp(24));
+            root.setBackgroundColor(Color.rgb(248, 246, 238));
+            heading = label("MIZZY’S BISTRO", 30, Color.rgb(31, 61, 47), true);
+            heading.setGravity(Gravity.CENTER);
+            location = label("", 17, Color.rgb(75, 83, 75), true);
+            location.setGravity(Gravity.CENTER);
+            customer = label("", 16, Color.rgb(75, 83, 75), false);
+            customer.setGravity(Gravity.CENTER);
+            message = label("", 20, Color.rgb(31, 61, 47), true);
+            message.setGravity(Gravity.CENTER);
+            ScrollView scroll = new ScrollView(getContext());
+            itemList = new LinearLayout(getContext());
+            itemList.setOrientation(LinearLayout.VERTICAL);
+            scroll.addView(itemList, new ScrollView.LayoutParams(
+                ScrollView.LayoutParams.MATCH_PARENT, ScrollView.LayoutParams.WRAP_CONTENT));
+            root.addView(heading, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+            root.addView(location, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+            root.addView(customer, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+            root.addView(message, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+            root.addView(scroll, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
+            total = label("", 28, Color.rgb(31, 61, 47), true);
+            total.setGravity(Gravity.CENTER);
+            root.addView(total, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+            setContentView(root);
+            render(customerDisplayState);
+        }
+
+        void render(CustomerDisplayState state) {
+            if (state == null || root == null) return;
+            location.setText(state.location);
+            customer.setText(state.customer.isEmpty() ? "" : "Customer: " + state.customer);
+            message.setText(state.message);
+            itemList.removeAllViews();
+            if (state.items.isEmpty()) {
+                TextView empty = label("Your order will appear here.", 20, Color.rgb(95, 101, 92), false);
+                itemList.addView(empty);
+            } else {
+                for (CustomerDisplayState.Item item : state.items) {
+                    TextView row = label(item.quantity + " × " + item.name + "    " +
+                        formatMoney(item.price * item.quantity), 19, Color.rgb(35, 41, 36), false);
+                    itemList.addView(row, new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+                }
+            }
+            total.setText("TOTAL  " + formatMoney(state.total));
+        }
     }
 
     @Override
@@ -424,6 +593,10 @@ public class MainActivity extends Activity {
         });
 
         setContentView(webView);
+        displayManager = (DisplayManager) getSystemService(Context.DISPLAY_SERVICE);
+        if (displayManager != null) {
+            displayManager.registerDisplayListener(customerDisplayListener, new Handler(Looper.getMainLooper()));
+        }
         webView.loadUrl("file:///android_asset/index.html");
     }
 
@@ -488,6 +661,12 @@ public class MainActivity extends Activity {
     @Override
     protected void onDestroy() {
         activityDestroyed = true;
+        customerDisplayEnabled = false;
+        dismissCustomerPresentation();
+        if (displayManager != null) {
+            try { displayManager.unregisterDisplayListener(customerDisplayListener); } catch (RuntimeException ignored) { }
+            displayManager = null;
+        }
         if (fileChooserCallback != null) {
             fileChooserCallback.onReceiveValue(null);
             fileChooserCallback = null;
