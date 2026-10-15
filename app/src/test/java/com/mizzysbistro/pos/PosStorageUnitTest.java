@@ -1,9 +1,14 @@
 package com.mizzysbistro.pos;
 
 import android.app.Application;
+import android.content.ContentValues;
 import android.content.Context;
+import android.database.Cursor;
+import android.database.sqlite.SQLiteDatabase;
 
+import org.json.JSONArray;
 import org.json.JSONException;
+import org.json.JSONObject;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -20,13 +25,24 @@ import static org.junit.Assert.assertTrue;
 @Config(sdk = 30)
 public final class PosStorageUnitTest {
     private static final String TEST_DATABASE = "mizzy_pos_robolectric_test.db";
-    private static final String VALID_SNAPSHOT =
-        "{\"products\":[{\"id\":1,\"name\":\"Test dish\",\"cat\":\"Mains\",\"price\":100}]," +
-        "\"sales\":[{\"id\":1001,\"total\":100}]," +
-        "\"stock\":{\"1\":4},\"tickets\":[],\"tables\":{},\"nextId\":1002}";
+    private static final String FIRST_SALE =
+        "{\"id\":1001,\"time\":\"2026-10-15T10:00:00.000Z\",\"type\":\"Dine in\"," +
+        "\"table\":4,\"payment\":\"Cash\",\"total\":100," +
+        "\"items\":[{\"name\":\"Test dish\",\"price\":100,\"qty\":1}]}";
+    private static final String SECOND_SALE =
+        "{\"id\":1002,\"time\":\"2026-10-15T11:00:00.000Z\",\"type\":\"Takeaway\"," +
+        "\"table\":null,\"payment\":\"Cash\",\"total\":50," +
+        "\"items\":[{\"name\":\"Tea\",\"price\":50,\"qty\":1}]}";
+    private static final String VALID_SNAPSHOT = snapshot("[" + FIRST_SALE + "]", 1002);
 
     private Context context;
     private PosStorage storage;
+
+    private static String snapshot(String salesJson, int nextId) {
+        return "{\"products\":[{\"id\":1,\"name\":\"Test dish\",\"cat\":\"Mains\",\"price\":100}]," +
+            "\"sales\":" + salesJson + "," +
+            "\"stock\":{\"1\":4},\"tickets\":[],\"tables\":{},\"nextId\":" + nextId + "}";
+    }
 
     @Before
     public void setUp() {
@@ -43,20 +59,75 @@ public final class PosStorageUnitTest {
     }
 
     @Test
-    public void savesAndReloadsSnapshotAfterDatabaseReopen() {
+    public void savesAndReloadsSnapshotAfterDatabaseReopen() throws JSONException {
         assertTrue(storage.saveState(VALID_SNAPSHOT));
-        assertEquals(VALID_SNAPSHOT, storage.loadState());
+        assertSaleIds(storage.loadState(), 1001L);
 
         storage.close();
         storage = new PosStorage(context, TEST_DATABASE);
-        assertEquals(VALID_SNAPSHOT, storage.loadState());
+        assertSaleIds(storage.loadState(), 1001L);
     }
 
     @Test
-    public void invalidReplacementDoesNotOverwriteLastCommittedSnapshot() {
+    public void normalSaveDoesNotDeleteHistoricalSales() throws JSONException {
+        assertTrue(storage.saveState(VALID_SNAPSHOT));
+        assertTrue(storage.saveState(snapshot("[" + SECOND_SALE + "]", 1003)));
+        assertSaleIds(storage.loadState(), 1002L, 1001L);
+    }
+
+    @Test
+    public void explicitRestoreReplacesSalesAtomically() throws JSONException {
+        assertTrue(storage.saveState(VALID_SNAPSHOT));
+        assertTrue(storage.restoreState(snapshot("[" + SECOND_SALE + "]", 1003)));
+        assertSaleIds(storage.loadState(), 1002L);
+    }
+
+    @Test
+    public void migratesV1SnapshotWithoutLosingSales() throws JSONException {
+        storage.close();
+        storage = null;
+        context.deleteDatabase(TEST_DATABASE);
+
+        SQLiteDatabase oldDatabase =
+            context.openOrCreateDatabase(TEST_DATABASE, Context.MODE_PRIVATE, null);
+        oldDatabase.execSQL(
+            "CREATE TABLE pos_state (id INTEGER NOT NULL PRIMARY KEY CHECK(id = 1), " +
+            "payload TEXT NOT NULL, updated_at INTEGER NOT NULL)"
+        );
+        ContentValues oldRow = new ContentValues();
+        oldRow.put("id", 1);
+        oldRow.put("payload", VALID_SNAPSHOT);
+        oldRow.put("updated_at", 111L);
+        assertTrue(oldDatabase.insert("pos_state", null, oldRow) != -1L);
+        oldDatabase.setVersion(1);
+        oldDatabase.close();
+
+        storage = new PosStorage(context, TEST_DATABASE);
+        assertSaleIds(storage.loadState(), 1001L);
+
+        SQLiteDatabase migrated = storage.getReadableDatabase();
+        Cursor base = migrated.rawQuery("SELECT payload FROM pos_state WHERE id = 1", null);
+        try {
+            assertTrue(base.moveToFirst());
+            JSONObject baseState = new JSONObject(base.getString(0));
+            assertEquals(0, baseState.getJSONArray("sales").length());
+        } finally {
+            base.close();
+        }
+        Cursor saleRows = migrated.rawQuery("SELECT COUNT(*) FROM pos_sales", null);
+        try {
+            assertTrue(saleRows.moveToFirst());
+            assertEquals(1, saleRows.getInt(0));
+        } finally {
+            saleRows.close();
+        }
+    }
+
+    @Test
+    public void invalidReplacementDoesNotOverwriteLastCommittedSnapshot() throws JSONException {
         assertTrue(storage.saveState(VALID_SNAPSHOT));
         assertFalse(storage.saveState("{not valid json"));
-        assertEquals(VALID_SNAPSHOT, storage.loadState());
+        assertSaleIds(storage.loadState(), 1001L);
     }
 
     @Test
@@ -72,6 +143,15 @@ public final class PosStorageUnitTest {
             repeat('x', 10 * 1024 * 1024) + "\"}";
         assertFalse(storage.saveState(oversized));
         assertEquals("", storage.loadState());
+    }
+
+    private static void assertSaleIds(String state, long... expectedIds) throws JSONException {
+        JSONObject root = new JSONObject(state);
+        JSONArray sales = root.getJSONArray("sales");
+        assertEquals(expectedIds.length, sales.length());
+        for (int i = 0; i < expectedIds.length; i++) {
+            assertEquals(expectedIds[i], sales.getJSONObject(i).getLong("id"));
+        }
     }
 
     private static String repeat(char character, int count) {
