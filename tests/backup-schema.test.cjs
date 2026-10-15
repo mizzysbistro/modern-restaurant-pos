@@ -20,6 +20,9 @@ function validBackup() {
         }
       ],
       stock: { "1": 9 },
+      stockAdjustments: [
+        { id: 1, time: "2026-10-15T10:01:00.000Z", productId: 1, productName: "Chicken Plate", from: 10, to: 9, delta: -1, reason: "Sale #1000", source: "Sale" }
+      ],
       tickets: [
         {
           id: 1001, time: "2026-10-15T10:00:00.000Z", type: "Dine in",
@@ -131,4 +134,24 @@ test("rejects completed sales with no line items", () => {
   const backup = validBackup();
   backup.state.sales[0].items = [];
   assert.match(validateBackupDocument(backup).error, /invalid sale record/);
+});
+
+
+test("accepts optional stock adjustment history and keeps old backup compatibility", () => {
+  const backup = validBackup();
+  assert.equal(validateBackupDocument(backup).ok, true);
+  delete backup.state.stockAdjustments;
+  assert.equal(validateBackupDocument(backup).ok, true);
+});
+
+test("rejects stock adjustment entries with inconsistent quantities", () => {
+  const backup = validBackup();
+  backup.state.stockAdjustments[0].delta = 1;
+  assert.match(validateBackupDocument(backup).error, /invalid stock adjustment history/);
+});
+
+test("rejects duplicate stock adjustment IDs", () => {
+  const backup = validBackup();
+  backup.state.stockAdjustments.push({ ...backup.state.stockAdjustments[0] });
+  assert.match(validateBackupDocument(backup).error, /invalid stock adjustment history/);
 });

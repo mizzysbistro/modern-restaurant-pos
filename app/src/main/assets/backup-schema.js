@@ -42,6 +42,28 @@
       return failure("The backup is missing required POS data.");
     }
 
+    if (state.stockAdjustments !== undefined) {
+      if (!Array.isArray(state.stockAdjustments) || state.stockAdjustments.length > 10000) {
+        return failure("The backup contains invalid stock adjustment history.");
+      }
+      const adjustmentIds = new Set();
+      for (const adjustment of state.stockAdjustments) {
+        if (!adjustment || typeof adjustment !== "object" ||
+            !isPositiveSafeInteger(adjustment.id) || adjustmentIds.has(adjustment.id) ||
+            !isPositiveSafeInteger(adjustment.productId) ||
+            typeof adjustment.time !== "string" || !Number.isFinite(Date.parse(adjustment.time)) ||
+            typeof adjustment.productName !== "string" || !adjustment.productName.trim() || adjustment.productName.length > 200 ||
+            !Number.isSafeInteger(adjustment.from) || adjustment.from < 0 || adjustment.from > 100000000 ||
+            !Number.isSafeInteger(adjustment.to) || adjustment.to < 0 || adjustment.to > 100000000 ||
+            !Number.isSafeInteger(adjustment.delta) || adjustment.delta !== adjustment.to - adjustment.from ||
+            typeof adjustment.reason !== "string" || !adjustment.reason.trim() || adjustment.reason.length > 160 ||
+            (adjustment.source !== "Manual" && adjustment.source !== "Sale")) {
+          return failure("The backup contains invalid stock adjustment history.");
+        }
+        adjustmentIds.add(adjustment.id);
+      }
+    }
+
     if (state.products.length > LIMITS.products ||
         state.sales.length > LIMITS.sales ||
         state.tickets.length > LIMITS.tickets) {

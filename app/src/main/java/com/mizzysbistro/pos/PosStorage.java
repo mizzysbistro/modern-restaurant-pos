@@ -379,6 +379,50 @@ public final class PosStorage extends SQLiteOpenHelper {
         return result != -1L;
     }
 
+    /** Validate optional append-style stock adjustment history; absent is a legacy snapshot. */
+    private boolean isValidStockAdjustments(JSONObject root) {
+        if (!root.has("stockAdjustments")) return true;
+        JSONArray adjustments = root.optJSONArray("stockAdjustments");
+        if (adjustments == null || adjustments.length() > 10000) return false;
+        Set<Long> seenIds = new HashSet<>();
+        for (int i = 0; i < adjustments.length(); i++) {
+            JSONObject entry = adjustments.optJSONObject(i);
+            if (entry == null) return false;
+            long id = saleId(entry);
+            Object rawProductId = entry.opt("productId");
+            Object rawFrom = entry.opt("from");
+            Object rawTo = entry.opt("to");
+            Object rawDelta = entry.opt("delta");
+            if (id < 1 || !seenIds.add(id) ||
+                !(rawProductId instanceof Number) ||
+                !(rawFrom instanceof Number) || !(rawTo instanceof Number) ||
+                !(rawDelta instanceof Number)) return false;
+            double productId = ((Number) rawProductId).doubleValue();
+            double from = ((Number) rawFrom).doubleValue();
+            double to = ((Number) rawTo).doubleValue();
+            double delta = ((Number) rawDelta).doubleValue();
+            String time = entry.optString("time", "");
+            String name = entry.optString("productName", "");
+            String reason = entry.optString("reason", "");
+            String source = entry.optString("source", "");
+            if (!Double.isFinite(productId) || productId < 1 ||
+                productId != Math.rint(productId) || productId > Long.MAX_VALUE ||
+                !Double.isFinite(from) || from < 0 || from > 100_000_000d ||
+                from != Math.rint(from) ||
+                !Double.isFinite(to) || to < 0 || to > 100_000_000d ||
+                to != Math.rint(to) ||
+                !Double.isFinite(delta) || delta != Math.rint(delta) ||
+                delta != to - from ||
+                time.isEmpty() || time.length() > 100 ||
+                name.trim().isEmpty() || name.length() > 200 ||
+                reason.trim().isEmpty() || reason.length() > 160 ||
+                !("Manual".equals(source) || "Sale".equals(source))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     private boolean isValidSnapshot(String payload) {
         if (payload == null || payload.isEmpty() || payload.length() > MAX_STATE_CHARS) {
             return false;
@@ -395,6 +439,7 @@ public final class PosStorage extends SQLiteOpenHelper {
                 stock == null || tables == null || !(nextId instanceof Number)) {
                 return false;
             }
+            if (!isValidStockAdjustments(root)) return false;
             double nextIdValue = ((Number) nextId).doubleValue();
             if (!Double.isFinite(nextIdValue) || nextIdValue < 1 ||
                 nextIdValue != Math.rint(nextIdValue) || nextIdValue > Long.MAX_VALUE) {

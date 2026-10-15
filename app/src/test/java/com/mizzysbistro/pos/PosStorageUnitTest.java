@@ -183,6 +183,51 @@ public final class PosStorageUnitTest {
     }
 
     @Test
+    public void stockAdjustmentHistoryPersistsWithState() throws JSONException {
+        JSONObject root = new JSONObject(VALID_SNAPSHOT);
+        JSONArray adjustments = new JSONArray();
+        JSONObject event = new JSONObject();
+        event.put("id", 1);
+        event.put("time", "2026-10-15T10:01:00.000Z");
+        event.put("productId", 1);
+        event.put("productName", "Test dish");
+        event.put("from", 4);
+        event.put("to", 3);
+        event.put("delta", -1);
+        event.put("reason", "Count correction");
+        event.put("source", "Manual");
+        adjustments.put(event);
+        root.put("stockAdjustments", adjustments);
+        assertTrue(storage.saveState(root.toString()));
+        storage.close();
+        storage = new PosStorage(context, TEST_DATABASE);
+        JSONObject restored = new JSONObject(storage.loadState());
+        assertEquals(1, restored.getJSONArray("stockAdjustments").length());
+        assertEquals(-1, restored.getJSONArray("stockAdjustments").getJSONObject(0).getInt("delta"));
+    }
+
+    @Test
+    public void rejectsInvalidStockAdjustmentHistory() throws JSONException {
+        assertTrue(storage.saveState(VALID_SNAPSHOT));
+        JSONObject root = new JSONObject(VALID_SNAPSHOT);
+        JSONArray adjustments = new JSONArray();
+        JSONObject event = new JSONObject();
+        event.put("id", 1);
+        event.put("time", "2026-10-15T10:01:00.000Z");
+        event.put("productId", 1);
+        event.put("productName", "Test dish");
+        event.put("from", 4);
+        event.put("to", 3);
+        event.put("delta", 3);
+        event.put("reason", "Count correction");
+        event.put("source", "Manual");
+        adjustments.put(event);
+        root.put("stockAdjustments", adjustments);
+        assertFalse(storage.saveState(root.toString()));
+        assertSaleIds(storage.loadState(), 1001L);
+    }
+
+    @Test
     public void rejectsSnapshotsMissingRequiredCollections() {
         assertFalse(storage.saveState("{\"products\":[],\"sales\":[]}"));
         assertEquals("", storage.loadState());
