@@ -63,7 +63,7 @@
     }
 
     for (const [id, quantity] of Object.entries(state.stock)) {
-      if (!/^\\d+$/.test(id) || !isPositiveSafeInteger(Number(id)) ||
+      if (!/^\d+$/.test(id) || !isPositiveSafeInteger(Number(id)) ||
           !Number.isSafeInteger(quantity) || quantity < 0 ||
           quantity > 100000000) {
         return failure("The backup contains an invalid stock quantity.");
@@ -119,7 +119,7 @@
     }
 
     for (const [table, saleId] of Object.entries(state.tables)) {
-      if (!/^\\d+$/.test(table) || Number(table) < 1 ||
+      if (!/^\d+$/.test(table) || Number(table) < 1 ||
           !isPositiveSafeInteger(saleId)) {
         return failure("The backup contains invalid table occupancy data.");
       }
