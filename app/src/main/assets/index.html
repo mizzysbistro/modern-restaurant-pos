@@ -25,7 +25,7 @@
 </aside>
 <main class="main">
 <header class="topbar">
-<div><div class="eyebrow">Tuesday · Service is open</div><h1 id="pageTitle">Good afternoon, Mizzy <span aria-hidden="true">✳</span></h1></div>
+<div><div class="eyebrow" id="connectionStatus" title="POS records are stored locally; cloud sync is not configured.">Checking connection…</div><h1 id="pageTitle">Good afternoon, Mizzy <span aria-hidden="true">✳</span></h1></div>
 <div class="top-actions"><button class="pill" id="shiftBtn">◷ &nbsp; Shift open</button><div class="staff"><div class="avatar">M</div><div><strong>Mizzy</strong><small>Administrator</small></div></div></div>
 </header>
 <section id="posPage">
@@ -83,6 +83,8 @@ if(window.PosStorage){let ok=false;try{ok=window.PosStorage.saveState(JSON.strin
 try{for(const [k,v] of Object.entries(snapshot))localStorage.setItem(STORE+":"+k,JSON.stringify(v))}catch(e){if(!window.PosStorage){notify("Could not save local data. Check device storage.");return false}}
 return true
 }
+function updateConnectionStatus(){const el=$("connectionStatus");if(!el)return;const connected=navigator.onLine;el.textContent=connected?"Internet available · local save only":"Offline mode · local save only";el.title=connected?"Internet is available. POS data is saved on this tablet; cloud synchronization is not configured.":"Internet is unavailable. POS data remains on this tablet."}
+window.addEventListener("online",updateConnectionStatus);window.addEventListener("offline",updateConnectionStatus);
 function notify(msg){$("notice").textContent=msg;$("notice").classList.add("show");clearTimeout(notify.t);notify.t=setTimeout(()=>$("notice").classList.remove("show"),2300)}
 function renderMenu(){const cats=["All",...new Set(products.map(p=>p.cat))];$("categories").innerHTML=cats.map(c=>'<button class="cat '+(category===c?"active":"")+'" data-cat="'+esc(c)+'">'+(c==="All"?"All items":esc(c))+'</button>').join("");const q=$("search").value.toLowerCase().trim();const list=products.filter(p=>(category==="All"||p.cat===category)&&p.name.toLowerCase().includes(q));$("menuGrid").innerHTML=list.map(p=>'<button class="item" data-add="'+p.id+'"><div class="foodart '+(/^art[1-9]$/.test(p.art||"")?p.art:"art1")+'"><span>'+esc(p.emoji||"🍽️")+'</span></div><div class="itemname">'+esc(p.name)+'</div><div class="itemmeta"><span class="price">'+money(p.price)+'</span><span class="tag">'+esc(p.tag||p.cat||"Menu item")+'</span></div><div class="addhint">＋ Tap to add · Stock '+(stock[p.id]??0)+'</div></button>').join("")||'<div class="placeholderpanel">No dishes found.</div>'}
 function renderCart(){const rows=[...cart.entries()],qty=rows.reduce((s,x)=>s+x[1].qty,0),sub=rows.reduce((s,[id,v])=>s+products.find(p=>p.id===id).price*v.qty,0);$("orderCount").textContent=qty+" items";$("subtotal").textContent=money(sub);$("tax").textContent=money(sub*12/112);$("total").textContent=money(sub);$("chargeTotal").textContent=money(sub)+" →";$("checkout").disabled=!qty;$("orderLines").innerHTML=rows.length?rows.map(([id,v])=>{const p=products.find(p=>p.id===id);return '<div class="lineitem"><div><strong>'+esc(p.name)+'</strong><small>'+money(p.price)+' each</small><div class="qty"><button data-qty="'+id+'" data-delta="-1">−</button><b>'+v.qty+'</b><button data-qty="'+id+'" data-delta="1">＋</button></div></div><div class="linetotal">'+money(p.price*v.qty)+'</div></div>'}).join(""):'<div class="empty"><div><span>🥢</span><br>Your order starts here</div></div>'}
@@ -110,7 +112,7 @@ function restoreBackupDocument(doc){
  if(!confirm("Restore this backup? It will replace the POS menu, sales, stock, kitchen tickets and table status currently on this tablet. Export a backup of current data first."))return false;
  const previous={products,sales,stock,tickets,occupied,nextId};
  products=st.products;sales=st.sales;stock=st.stock;tickets=st.tickets;occupied=st.tables;nextId=st.nextId;cart.clear();
- if(!save()){products=previous.products;sales=previous.sales;stock=previous.stock;tickets=previous.tickets;occupied=previous.occupied;nextId=previous.nextId;renderMenu();renderCart();renderTables();renderInventory();renderReports();notify("Restore failed. Existing data was kept.");return false}
+ if(!save()){products=previous.products;sales=previous.sales;stock=previous.stock;tickets=previous.tickets;occupied=previous.occupied;nextId=previous.nextId;updateConnectionStatus();renderMenu();renderCart();renderTables();renderInventory();renderReports();notify("Restore failed. Existing data was kept.");return false}
  renderMenu();renderCart();renderTables();renderInventory();renderReports();showPage("pos");notify("POS backup restored successfully.");return true
 }
 const MAX_BACKUP_BYTES=10*1024*1024;
