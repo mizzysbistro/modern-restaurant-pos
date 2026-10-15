@@ -3,6 +3,8 @@ name: Validate POS Backup and Restore
 on:
   push:
     branches: [feature/backup-restore]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
