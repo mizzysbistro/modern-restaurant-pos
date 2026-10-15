@@ -19,11 +19,30 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - name: Restore persistent debug signing key
+      - name: Restore explicit debug signing key
         uses: actions/cache@v4
         with:
-          path: ~/.android/debug.keystore
-          key: modern-restaurant-pos-debug-signing-v1
+          path: .signing/debug.keystore
+          key: mizzy-pos-persistent-debug-signing-v1
+      - name: Create signing key only during initial setup
+        shell: bash
+        run: |
+          mkdir -p .signing
+          if [[ -s .signing/debug.keystore ]]; then
+            echo "Using the cached persistent signing key."
+          elif [[ -f .signing/KEY_INITIALIZED ]]; then
+            echo "::error::The persistent signing key is missing. Refusing to generate a replacement because it would break APK updates. Restore the original key securely."
+            exit 1
+          else
+            keytool -genkeypair -v \\
+              -keystore .signing/debug.keystore \\
+              -storepass android \\
+              -alias androiddebugkey \\
+              -keypass android \\
+              -keyalg RSA -keysize 2048 -validity 10000 \\
+              -dname "CN=Mizzy's Bistro POS, OU=Development, O=Mizzy's Bistro, C=PH" \\
+              -noprompt
+          fi
       - name: Set up Android SDK
         run: |
           echo "ANDROID_HOME=${ANDROID_HOME:-/usr/local/lib/android/sdk}" >> "$GITHUB_ENV"
@@ -43,12 +62,38 @@ jobs:
         run: |
           sed -i "s/versionCode 1/versionCode $GITHUB_RUN_NUMBER/" app/build.gradle
           sed -i "s/versionName '1.0.0'/versionName '1.0.$GITHUB_RUN_NUMBER'/" app/build.gradle
+      - name: Run SQLite instrumentation tests
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          disable-animations: true
+          script: gradle --no-daemon connectedDebugAndroidTest
       - name: Build debug APK
         run: gradle --no-daemon assembleDebug
+      - name: Verify APK signature matches persistent key
+        shell: bash
+        run: |
+          APK="app/build/outputs/apk/debug/app-debug.apk"
+          APKSIGNER="$ANDROID_HOME/build-tools/35.0.0/apksigner"
+          "$APKSIGNER" verify --verbose "$APK"
+          KEY_SHA="$(keytool -list -v -keystore .signing/debug.keystore -storepass android -alias androiddebugkey | awk '/SHA256:/{print $2; exit}' | tr -d ':' | tr '[:lower:]' '[:upper:]')"
+          APK_SHA="$("$APKSIGNER" verify --print-certs "$APK" | awk '/Signer #1 certificate SHA-256 digest:/{print $NF}' | tr -d ':' | tr '[:lower:]' '[:upper:]')"
+          if [[ -z "$KEY_SHA" || -z "$APK_SHA" || "$KEY_SHA" != "$APK_SHA" ]]; then
+            echo "::error::APK signer does not match the persistent signing key."
+            echo "Keystore fingerprint: $KEY_SHA"
+            echo "APK fingerprint: $APK_SHA"
+            exit 1
+          fi
+          printf '%s\\n' "$APK_SHA" > app/build/outputs/apk/debug/signing-certificate.sha256
+          echo "Verified APK signing certificate SHA-256: $APK_SHA"
       - name: Upload installable APK
         uses: actions/upload-artifact@v4
         with:
           name: modern-restaurant-pos-debug-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: |
+            app/build/outputs/apk/debug/app-debug.apk
+            app/build/outputs/apk/debug/signing-certificate.sha256
           if-no-files-found: error
           retention-days: 14
