@@ -271,6 +271,9 @@ $("search").addEventListener("input",renderMenu);$("tablePick").addEventListener
 $("checkout").addEventListener("click",()=>{$("modalTotal").textContent=money([...cart].reduce((s,[id,v])=>s+products.find(p=>p.id===id).price*v.qty,0));$("payModal").classList.add("open")});$("cancelPay").addEventListener("click",()=>$("payModal").classList.remove("open"));$("payModal").addEventListener("click",e=>{if(e.target===$("payModal"))$("payModal").classList.remove("open")});
 $("confirmPay").addEventListener("click",()=>{
  if(!cart.size)return;
+ if(orderType==="Dine in"&&activeOpenOrderId===null&&Number(occupied[tableNo]||0)>0){
+  return notify("This table is still occupied by a completed order. Release it in Tables before starting another order.");
+ }
  const currentOpenOrder=activeOpenOrderId===null?null:openOrders.find(order=>Number(order.id)===activeOpenOrderId);
  if(activeOpenOrderId!==null&&(!currentOpenOrder||Number(currentOpenOrder.table)!==tableNo||orderType!=="Dine in"))return notify("The active table order could not be found. Reopen it from Tables.");
  for(const [id,item] of cart){if((stock[id]||0)<item.qty){notify("Insufficient stock for "+cartLineName(id,item));return}}
