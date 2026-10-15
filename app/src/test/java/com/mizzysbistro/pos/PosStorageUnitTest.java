@@ -178,6 +178,33 @@ public final class PosStorageUnitTest {
     }
 
     @Test
+    public void rejectsMalformedKitchenTicketsWithoutOverwritingSavedSales() throws JSONException {
+        assertTrue(storage.saveState(VALID_SNAPSHOT));
+        for (int variant = 0; variant < 5; variant++) {
+            JSONObject root = new JSONObject(VALID_SNAPSHOT);
+            JSONObject ticket = new JSONObject();
+            ticket.put("id", 1001);
+            ticket.put("time", "2026-10-15T10:00:00.000Z");
+            ticket.put("type", "Dine in");
+            ticket.put("table", 4);
+            ticket.put("done", false);
+            JSONObject item = new JSONObject().put("name", "Test dish").put("price", 100).put("qty", 1);
+            ticket.put("items", new JSONArray().put(item));
+            JSONArray tickets = new JSONArray();
+            tickets.put(ticket);
+            if (variant == 0) ticket.put("done", "false");
+            if (variant == 1) ticket.put("time", "not-a-date");
+            if (variant == 2) ticket.put("table", 13);
+            if (variant == 3) item.put("qty", 0);
+            if (variant == 4) tickets.put(new JSONObject(ticket.toString()));
+            root.put("tickets", tickets);
+            assertFalse("Invalid kitchen ticket variant " + variant,
+                storage.saveState(root.toString()));
+            assertSaleIds(storage.loadState(), 1001L);
+        }
+    }
+
+    @Test
     public void rejectsSaleWhenTotalDoesNotMatchItemSubtotal() throws JSONException {
         assertTrue(storage.saveState(VALID_SNAPSHOT));
         JSONObject invalidSale = new JSONObject(SECOND_SALE);

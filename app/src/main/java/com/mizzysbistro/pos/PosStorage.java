@@ -470,6 +470,50 @@ public final class PosStorage extends SQLiteOpenHelper {
         }
     }
 
+    /** Validate kitchen-ticket records before they enter durable state. */
+    private boolean isValidKitchenTickets(JSONArray tickets) {
+        if (tickets == null || tickets.length() > 10000) return false;
+        Set<Long> seenIds = new HashSet<>();
+        for (int i = 0; i < tickets.length(); i++) {
+            JSONObject ticket = tickets.optJSONObject(i);
+            if (ticket == null) return false;
+            Object rawId = ticket.opt("id");
+            Object rawDone = ticket.opt("done");
+            Object rawTable = ticket.opt("table");
+            JSONArray items = ticket.optJSONArray("items");
+            String time = ticket.optString("time", "");
+            String type = ticket.optString("type", "");
+            if (!(rawId instanceof Number) || !(rawDone instanceof Boolean) ||
+                items == null || items.length() > 500 || !isValidTimestamp(time) ||
+                !("Dine in".equals(type) || "Takeaway".equals(type))) return false;
+            double idValue = ((Number) rawId).doubleValue();
+            if (!Double.isFinite(idValue) || idValue < 1 ||
+                idValue != Math.rint(idValue) || idValue > 9007199254740991d) return false;
+            long id = (long) idValue;
+            if (!seenIds.add(id)) return false;
+            if ("Dine in".equals(type)) {
+                if (!(rawTable instanceof Number)) return false;
+                double table = ((Number) rawTable).doubleValue();
+                if (!Double.isFinite(table) || table != Math.rint(table) ||
+                    table < 1 || table > 12) return false;
+            } else if (rawTable != null && rawTable != JSONObject.NULL) {
+                return false;
+            }
+            for (int itemIndex = 0; itemIndex < items.length(); itemIndex++) {
+                JSONObject item = items.optJSONObject(itemIndex);
+                if (item == null) return false;
+                String name = item.optString("name", "");
+                Object rawQuantity = item.opt("qty");
+                if (name.trim().isEmpty() || name.length() > 200 ||
+                    !(rawQuantity instanceof Number)) return false;
+                double quantity = ((Number) rawQuantity).doubleValue();
+                if (!Double.isFinite(quantity) || quantity != Math.rint(quantity) ||
+                    quantity < 1 || quantity > 100000) return false;
+            }
+        }
+        return true;
+    }
+
     /** Validate optional append-style stock adjustment history; absent is a legacy snapshot. */
     private boolean isValidStockAdjustments(JSONObject root) {
         if (!root.has("stockAdjustments")) return true;
@@ -610,7 +654,8 @@ public final class PosStorage extends SQLiteOpenHelper {
                 stock == null || tables == null || !(nextId instanceof Number)) {
                 return false;
             }
-            if (!isValidStockAdjustments(root) || !isValidOpenCart(root, products)) return false;
+            if (!isValidStockAdjustments(root) || !isValidOpenCart(root, products) ||
+                !isValidKitchenTickets(tickets)) return false;
             double nextIdValue = ((Number) nextId).doubleValue();
             if (!Double.isFinite(nextIdValue) || nextIdValue < 1 ||
                 nextIdValue != Math.rint(nextIdValue) || nextIdValue > Long.MAX_VALUE) {
