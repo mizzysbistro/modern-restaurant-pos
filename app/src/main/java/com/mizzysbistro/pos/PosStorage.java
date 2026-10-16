@@ -6,6 +6,13 @@ import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
 import android.webkit.JavascriptInterface;
+import android.util.Base64;
+
+import java.security.MessageDigest;
+import java.security.SecureRandom;
+import java.util.Arrays;
+import javax.crypto.SecretKeyFactory;
+import javax.crypto.spec.PBEKeySpec;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -84,6 +91,68 @@ public final class PosStorage extends SQLiteOpenHelper {
             return "";
         } finally {
             if (cursor != null) cursor.close();
+        }
+    }
+
+
+    /**
+     * Creates a salted, iterated PIN verifier. Only the verifier is returned to
+     * JavaScript; the plaintext PIN is never persisted by the native layer.
+     * Format: algorithm:salt:derived-key (Base64 without line breaks).
+     */
+    @JavascriptInterface
+    public synchronized String hashPin(String pin) {
+        if (pin == null || !pin.matches("[0-9]{4,8}")) return "";
+        byte[] salt = new byte[16];
+        new SecureRandom().nextBytes(salt);
+        String algorithm = "PBKDF2WithHmacSHA256";
+        byte[] derived;
+        try {
+            derived = derivePin(pin, salt, algorithm);
+        } catch (Exception unsupported) {
+            algorithm = "PBKDF2WithHmacSHA1";
+            try {
+                derived = derivePin(pin, salt, algorithm);
+            } catch (Exception error) {
+                return "";
+            }
+        }
+        return (algorithm.equals("PBKDF2WithHmacSHA256") ? "p2h256" : "p2h1") + ":" +
+            Base64.encodeToString(salt, Base64.NO_WRAP) + ":" +
+            Base64.encodeToString(derived, Base64.NO_WRAP);
+    }
+
+    /** Verifies a PIN in constant-time against a salted native verifier. */
+    @JavascriptInterface
+    public synchronized boolean verifyPin(String pin, String encodedVerifier) {
+        if (pin == null || !pin.matches("[0-9]{4,8}") || encodedVerifier == null) return false;
+        String[] parts = encodedVerifier.split(":", 3);
+        if (parts.length != 3) return false;
+        final String algorithm;
+        if ("p2h256".equals(parts[0])) {
+            algorithm = "PBKDF2WithHmacSHA256";
+        } else if ("p2h1".equals(parts[0])) {
+            algorithm = "PBKDF2WithHmacSHA1";
+        } else {
+            return false;
+        }
+        try {
+            byte[] salt = Base64.decode(parts[1], Base64.NO_WRAP);
+            byte[] expected = Base64.decode(parts[2], Base64.NO_WRAP);
+            byte[] actual = derivePin(pin, salt, algorithm);
+            return MessageDigest.isEqual(expected, actual);
+        } catch (Exception error) {
+            return false;
+        }
+    }
+
+    private static byte[] derivePin(String pin, byte[] salt, String algorithm) throws Exception {
+        PBEKeySpec spec = new PBEKeySpec(pin.toCharArray(), salt, 120000, 256);
+        try {
+            SecretKeyFactory factory = SecretKeyFactory.getInstance(algorithm);
+            return factory.generateSecret(spec).getEncoded();
+        } finally {
+            spec.clearPassword();
         }
     }
 
