@@ -63,9 +63,12 @@ public final class PosStorageInstrumentedTest {
 
     @Test
     public void rejectsOversizedSnapshot() {
+        storage.close();
+        context.deleteDatabase(TEST_DATABASE);
+        storage = new PosStorage(context, TEST_DATABASE, 512);
         String oversized = "{\"products\":[],\"sales\":[],\"tickets\":[],\"stock\":{}," +
             "\"tables\":{},\"nextId\":1001,\"extra\":\"" +
-            repeat('x', 10 * 1024 * 1024) + "\"}";
+            repeat('x', 1024) + "\"}";
         assertFalse(storage.saveState(oversized));
         assertEquals("", storage.loadState());
     }

@@ -23,15 +23,26 @@ public final class PosStorage extends SQLiteOpenHelper {
     private static final String TABLE_STATE = "pos_state";
     private static final int STATE_ROW_ID = 1;
     private static final int MAX_STATE_CHARS = 10 * 1024 * 1024;
+    private final int maxStateChars;
 
     public PosStorage(Context context) {
-        this(context, DATABASE_NAME);
+        this(context, DATABASE_NAME, MAX_STATE_CHARS);
     }
 
     // Package-private database-name override keeps instrumentation tests isolated
     // from the real application's POS database.
     PosStorage(Context context, String databaseName) {
+        this(context, databaseName, MAX_STATE_CHARS);
+    }
+
+    // A smaller package-private limit lets instrumentation test rejection behavior
+    // without allocating a full 10 MiB payload in the emulator.
+    PosStorage(Context context, String databaseName, int maxStateChars) {
         super(context.getApplicationContext(), databaseName, null, DATABASE_VERSION);
+        if (maxStateChars <= 0) {
+            throw new IllegalArgumentException("Maximum state size must be positive.");
+        }
+        this.maxStateChars = maxStateChars;
     }
 
     @Override
@@ -106,7 +117,7 @@ public final class PosStorage extends SQLiteOpenHelper {
     }
 
     private boolean isValidSnapshot(String payload) {
-        if (payload == null || payload.isEmpty() || payload.length() > MAX_STATE_CHARS) {
+        if (payload == null || payload.isEmpty() || payload.length() > maxStateChars) {
             return false;
         }
         try {

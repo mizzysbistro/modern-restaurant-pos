@@ -74,14 +74,6 @@ jobs:
         run: gradle --no-daemon testDebugUnitTest assembleDebugAndroidTest
       - name: Build debug APK
         run: gradle --no-daemon assembleDebug
-      - name: Run Android instrumentation tests on emulator
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: 35
-          target: google_apis
-          arch: x86_64
-          profile: pixel_2
-          script: gradle --no-daemon connectedDebugAndroidTest
       - name: Verify APK signature matches persistent key
         shell: bash
         run: |
@@ -107,3 +99,27 @@ jobs:
             app/build/outputs/apk/debug/signing-certificate.sha256
           if-no-files-found: error
           retention-days: 14
+      - name: Run Android instrumentation tests on emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_2
+          script: |
+            set +e
+            gradle --no-daemon connectedDebugAndroidTest
+            test_status=$?
+            mkdir -p app/build/reports/emulator
+            adb logcat -d -v threadtime > app/build/reports/emulator/logcat.txt 2>&1
+            adb shell dumpsys activity instrumentation > app/build/reports/emulator/instrumentation.txt 2>&1
+            adb shell dumpsys activity processes > app/build/reports/emulator/processes.txt 2>&1
+            exit "$test_status"
+      - name: Upload emulator diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: modern-restaurant-pos-emulator-diagnostics
+          path: app/build/reports/emulator/
+          if-no-files-found: ignore
+          retention-days: 7
